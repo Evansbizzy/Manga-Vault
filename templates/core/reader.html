@@ -1,0 +1,169 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Ch. {{ chapter.chapter_number }} — {{ manga.title }} — MangaVault{% endblock %}
+
+{% block extra_css %}
+<style>
+.reader-nav {
+    display: flex; justify-content: space-between; align-items: center;
+    padding: .75rem; background: var(--bg-card); border:1px solid var(--border);
+    border-radius: var(--radius-sm); margin-bottom: 1rem;
+}
+.reader-nav .info { text-align: center; min-width: 0; flex: 1; }
+.reader-nav .info h2 { font-size: .9rem; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.reader-nav .info .sub { font-size: .78rem; color: var(--text-muted); }
+.reader-modes { display: flex; gap: .3rem; }
+.reader-modes button { border: none; background: var(--bg-secondary); color: var(--text-secondary); padding: .4rem .7rem; border-radius: var(--radius-sm); cursor: pointer; font-size: .8rem; transition: all .2s; }
+.reader-modes button.active { background: var(--accent); color: #fff; }
+
+.reader-viewport { max-width: 900px; margin: 0 auto; }
+.reader-viewport.mode-scroll img { width: 100%; display: block; margin-bottom: 4px; }
+.reader-viewport.mode-single { text-align: center; position: relative; }
+.reader-viewport.mode-single img { max-width: 100%; max-height: 85vh; display: none; }
+.reader-viewport.mode-single img.active-page { display: inline-block; }
+
+.reader-footer {
+    display: flex; justify-content: center; gap: 1rem; padding: 1.5rem; flex-wrap: wrap;
+}
+.page-indicator { font-size: .85rem; color: var(--text-muted); display: flex; align-items: center; gap: .3rem; }
+.page-indicator i { width: 14px; height: 14px; }
+
+.reader-loading { text-align: center; padding: 3rem; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="reader-nav">
+    <a href="/manga/{{ manga.id }}/" class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i> Back</a>
+    <div class="info">
+        <h2>{{ manga.title }}</h2>
+        <div class="sub">Chapter {{ chapter.chapter_number }}{% if chapter.title %} — {{ chapter.title }}{% endif %}</div>
+    </div>
+    <div class="reader-modes">
+        <button onclick="setMode('scroll')" id="mode-scroll" class="active">Scroll</button>
+        <button onclick="setMode('single')" id="mode-single">Page</button>
+    </div>
+</div>
+
+<div id="reader-loading" class="reader-loading">
+    <div class="spinner" style="width:40px;height:40px;border-width:3px"></div>
+    <p style="margin-top:1rem;color:var(--text-secondary)">Loading pages...</p>
+</div>
+
+<div class="reader-viewport mode-scroll" id="viewport" style="display:none"></div>
+
+<div class="reader-footer" id="reader-footer" style="display:none">
+    <a href="#" id="btn-prev" class="btn btn-ghost" style="display:none"><i data-lucide="chevron-left"></i> Previous</a>
+    <div class="page-indicator" id="page-indicator"><i data-lucide="image"></i> <span id="page-info">0 pages</span></div>
+    <a href="#" id="btn-next" class="btn btn-ghost" style="display:none">Next <i data-lucide="chevron-right"></i></a>
+</div>
+
+<script>
+var chapterId = {{ chapter.id }};
+var pages = [];
+var currentPage = 0;
+var mode = 'scroll';
+
+fetch('/api/chapter/' + chapterId + '/pages/')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) {
+            document.getElementById('reader-loading').innerHTML = '<p style="color:var(--accent)">' + data.error + '</p>';
+            return;
+        }
+
+        pages = data.pages || [];
+        document.getElementById('reader-loading').style.display = 'none';
+
+        if (!pages.length) {
+            document.getElementById('viewport').innerHTML = '<div class="empty-state"><div class="icon-wrap"><i data-lucide="image-off"></i></div><p>No pages found for this chapter.</p></div>';
+            document.getElementById('viewport').style.display = 'block';
+            lucide.createIcons();
+            return;
+        }
+
+        var vp = document.getElementById('viewport');
+        pages.forEach(function(url, i) {
+            var img = document.createElement('img');
+            img.src = url;
+            img.alt = 'Page ' + (i + 1);
+            img.loading = 'lazy';
+            img.onerror = function() {
+                this.alt = 'Failed to load page ' + (i + 1);
+                this.style.minHeight = '200px';
+                this.style.background = 'var(--bg-card)';
+            };
+            if (i === 0) img.classList.add('active-page');
+            vp.appendChild(img);
+        });
+
+        vp.style.display = 'block';
+        document.getElementById('reader-footer').style.display = 'flex';
+        document.getElementById('page-info').textContent = pages.length + ' pages';
+
+        if (data.prev_chapter_id) {
+            var btn = document.getElementById('btn-prev');
+            btn.href = '/reader/' + data.prev_chapter_id + '/';
+            btn.style.display = 'inline-flex';
+        }
+        if (data.next_chapter_id) {
+            var btn = document.getElementById('btn-next');
+            btn.href = '/reader/' + data.next_chapter_id + '/';
+            btn.style.display = 'inline-flex';
+        }
+
+        lucide.createIcons();
+    })
+    .catch(function(err) {
+        document.getElementById('reader-loading').innerHTML = '<p style="color:var(--accent)">Failed to load: ' + err.message + '</p>';
+    });
+
+function setMode(m) {
+    mode = m;
+    var vp = document.getElementById('viewport');
+    document.getElementById('mode-scroll').classList.toggle('active', m === 'scroll');
+    document.getElementById('mode-single').classList.toggle('active', m === 'single');
+
+    if (m === 'scroll') {
+        vp.className = 'reader-viewport mode-scroll';
+        var imgs = vp.querySelectorAll('img');
+        imgs.forEach(function(img) { img.classList.remove('active-page'); img.style.display = 'block'; });
+        document.getElementById('page-info').textContent = pages.length + ' pages';
+    } else {
+        vp.className = 'reader-viewport mode-single';
+        var imgs = vp.querySelectorAll('img');
+        currentPage = 0;
+        imgs.forEach(function(img, i) {
+            img.style.display = '';
+            img.classList.toggle('active-page', i === 0);
+        });
+        updatePageInfo();
+    }
+}
+
+function updatePageInfo() {
+    if (mode === 'single') {
+        document.getElementById('page-info').textContent = (currentPage + 1) + ' / ' + pages.length;
+    }
+}
+
+function goToPage(delta) {
+    if (mode !== 'single') return;
+    var next = currentPage + delta;
+    if (next < 0 || next >= pages.length) return;
+    var imgs = document.getElementById('viewport').querySelectorAll('img');
+    imgs[currentPage].classList.remove('active-page');
+    currentPage = next;
+    imgs[currentPage].classList.add('active-page');
+    updatePageInfo();
+    window.scrollTo(0, 0);
+}
+
+document.addEventListener('keydown', function(e) {
+    if (mode === 'single') {
+        if (e.key === 'ArrowRight' || e.key === 'd') goToPage(1);
+        if (e.key === 'ArrowLeft' || e.key === 'a') goToPage(-1);
+    }
+});
+</script>
+{% endblock %}

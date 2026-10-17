@@ -1,0 +1,91 @@
+{% extends 'core/base.html' %}
+
+{% block title %}MangaVault — Manga &amp; Manhwa Downloader{% endblock %}
+
+{% block extra_css %}
+<style>
+.hero {
+    text-align: center; padding: 4rem 1rem;
+    background: linear-gradient(135deg, rgba(248,81,73,.08), rgba(88,166,255,.06));
+    border-radius: var(--radius); margin-bottom: 2rem;
+}
+.hero h1 {
+    font-size: 2.2rem; font-weight: 800;
+    background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+}
+.hero p { color: var(--text-secondary); margin-top: .6rem; max-width: 500px; margin-inline: auto; }
+.hero .cta { margin-top: 1.5rem; }
+.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
+.feature-card {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1.5rem; text-align: center; transition: border-color .2s;
+}
+.feature-card:hover { border-color: var(--accent); }
+.feature-card .icon-wrap { margin-bottom: .75rem; }
+.feature-card .icon-wrap i { width: 32px; height: 32px; color: var(--accent-secondary); }
+.feature-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: .3rem; }
+.feature-card p { font-size: .8rem; color: var(--text-muted); }
+.section-title {
+    font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;
+    display: flex; align-items: center; gap: .5rem;
+}
+.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
+.section-title i { width: 20px; height: 20px; color: var(--accent); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="hero">
+    <h1>Manga & Manhwa Downloader</h1>
+    <p>Search, read online, and download entire chapters and volumes as CBZ archives.</p>
+    <div class="cta">
+        <a href="/search/" class="btn btn-primary"><i data-lucide="search"></i> Start Searching</a>
+    </div>
+</div>
+
+<div class="features">
+    <div class="feature-card">
+        <div class="icon-wrap"><i data-lucide="scan-search"></i></div>
+        <h3>Multi-Source Search</h3>
+        <p>Search MangaDex, MangaPill, Comick, and more from one unified interface.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon-wrap"><i data-lucide="book-open-check"></i></div>
+        <h3>Read Online</h3>
+        <p>Read chapters directly in your browser with a smooth reader experience.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon-wrap"><i data-lucide="archive"></i></div>
+        <h3>CBZ Downloads</h3>
+        <p>Download chapters and volumes packaged as CBZ comic archives.</p>
+    </div>
+    <div class="feature-card">
+        <div class="icon-wrap"><i data-lucide="link"></i></div>
+        <h3>URL Import</h3>
+        <p>Paste any manga URL — auto-detects the site and imports it.</p>
+    </div>
+</div>
+
+<h2 class="section-title"><i data-lucide="clock"></i> Recently Added</h2>
+
+{% if manga_list %}
+<div class="grid">
+    {% for manga in manga_list %}
+    <a href="/manga/{{ manga.id }}/" class="card">
+        <img src="{{ manga.cover_url }}" alt="{{ manga.title }}" loading="lazy"
+             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>'">
+        <div class="card-body">
+            <h3>{{ manga.title }}</h3>
+            <div class="meta">{{ manga.source }} &middot; {{ manga.total_chapters_count }} chapters</div>
+        </div>
+    </a>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <div class="icon-wrap"><i data-lucide="book-marked"></i></div>
+    <p>Your library is empty. <a href="/search/">Search for manga</a> to get started.</p>
+</div>
+{% endif %}
+{% endblock %}

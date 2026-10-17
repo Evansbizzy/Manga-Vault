@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+.venv/
+venv/
+env/
+.env
+.env.*
+!.env.example
+
+# Django/runtime
+db.sqlite3
+media/
+staticfiles/
+downloads/
+*.log
+
+# Local tooling
+.DS_Store
+.idea/
+.vscode/
+.pytest_cache/
+.mypy_cache/
+coverage.xml
+htmlcov/
+
+# Archives and generated exports
+*.zip
+*.cbz
+
+# Previous local duplicate/backup copy
+to_scrap/

@@ -1,0 +1,227 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}MangaVault{% endblock %}</title>
+    <meta name="description" content="Search, read, and download manga, manhwa, and manhua as CBZ archives.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        /* Reset & Tokens */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+        :root {
+            --bg-primary: #0d1117;
+            --bg-secondary: #161b22;
+            --bg-card: #1c2333;
+            --border: #30363d;
+            --text-primary: #e6edf3;
+            --text-secondary: #8b949e;
+            --text-muted: #6e7681;
+            --accent: #f85149;
+            --accent-hover: #da3633;
+            --accent-secondary: #58a6ff;
+            --success: #3fb950;
+            --warning: #d29922;
+            --radius: 12px;
+            --radius-sm: 8px;
+            --shadow: 0 2px 12px rgba(0,0,0,.4);
+        }
+        html {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+        }
+        a { color: var(--accent-secondary); text-decoration: none; }
+        a:hover { text-decoration: underline; }
+        img { max-width: 100%; display: block; }
+
+        /* Navbar */
+        .navbar {
+            display: flex; align-items: center; gap: 1.5rem;
+            padding: .75rem 1.5rem;
+            background: var(--bg-secondary);
+            border-bottom: 1px solid var(--border);
+            position: sticky; top: 0; z-index: 100;
+            backdrop-filter: blur(12px);
+        }
+        .navbar .brand {
+            font-weight: 800; font-size: 1.15rem; color: var(--accent);
+            display: flex; align-items: center; gap: .4rem;
+        }
+        .navbar .brand i { width: 22px; height: 22px; }
+        .navbar a.nav-link {
+            color: var(--text-secondary); font-size: .875rem; font-weight: 500;
+            transition: color .2s; display: flex; align-items: center; gap: .35rem;
+        }
+        .navbar a.nav-link:hover { color: var(--text-primary); text-decoration: none; }
+        .navbar a.nav-link i { width: 16px; height: 16px; }
+
+        /* Container */
+        .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+
+        /* Grid */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: 1rem;
+        }
+        .card {
+            background: var(--bg-card); border: 1px solid var(--border);
+            border-radius: var(--radius); overflow: hidden;
+            transition: transform .2s, box-shadow .2s;
+            cursor: pointer; text-decoration: none; color: inherit;
+        }
+        .card:hover { transform: translateY(-4px); box-shadow: var(--shadow); text-decoration: none; }
+        .card img { width: 100%; aspect-ratio: 2/3; object-fit: cover; }
+        .card-body { padding: .7rem; }
+        .card-body h3 {
+            font-size: .85rem; font-weight: 700; line-height: 1.3;
+            display: -webkit-box; -webkit-line-clamp: 2; line-clamp: 2;
+            -webkit-box-orient: vertical; overflow: hidden;
+        }
+        .card-body .meta { font-size: .75rem; color: var(--text-muted); margin-top: .25rem; }
+
+        /* Badges */
+        .badge {
+            display: inline-flex; align-items: center; gap: .2rem;
+            font-size: .7rem; font-weight: 600; padding: .15rem .5rem;
+            border-radius: 999px; text-transform: uppercase; letter-spacing: .3px;
+        }
+        .badge-accent { background: rgba(248,81,73,.15); color: var(--accent); }
+        .badge-blue { background: rgba(88,166,255,.15); color: var(--accent-secondary); }
+        .badge-muted { background: rgba(110,118,129,.2); color: var(--text-secondary); }
+        .badge-success { background: rgba(63,185,80,.15); color: var(--success); }
+        .badge-warning { background: rgba(210,153,34,.15); color: var(--warning); }
+
+        /* Buttons */
+        .btn {
+            display: inline-flex; align-items: center; gap: .4rem;
+            padding: .55rem 1.1rem; border-radius: var(--radius-sm);
+            font-family: inherit; font-size: .85rem; font-weight: 600;
+            border: 1px solid var(--border); cursor: pointer;
+            transition: all .2s; text-decoration: none;
+        }
+        .btn i { width: 16px; height: 16px; }
+        .btn-primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+        .btn-primary:hover { background: var(--accent-hover); text-decoration: none; }
+        .btn-ghost { background: transparent; color: var(--text-secondary); border-color: var(--border); }
+        .btn-ghost:hover { background: var(--bg-card); color: var(--text-primary); text-decoration: none; }
+        .btn-sm { padding: .35rem .7rem; font-size: .8rem; }
+        .btn-success { background: var(--success); color: #fff; border-color: var(--success); }
+        .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+        /* Inputs */
+        .input, .select-styled {
+            padding: .6rem 1rem; border-radius: var(--radius-sm);
+            border: 1px solid var(--border); background: var(--bg-secondary);
+            color: var(--text-primary); font-family: inherit; font-size: .9rem;
+            outline: none; transition: border-color .2s;
+        }
+        .input:focus, .select-styled:focus { border-color: var(--accent); }
+
+        /* Progress Bar */
+        .progress-bar { height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden; width: 100%; }
+        .progress-bar .fill { height: 100%; background: var(--accent); border-radius: 3px; transition: width .4s ease; }
+
+        /* Empty State */
+        .empty-state { text-align: center; padding: 4rem 1rem; color: var(--text-muted); }
+        .empty-state .icon-wrap { margin-bottom: 1rem; }
+        .empty-state .icon-wrap i { width: 48px; height: 48px; color: var(--text-muted); }
+
+        /* Spinner */
+        .spinner {
+            width: 24px; height: 24px;
+            border: 2px solid var(--border); border-top-color: var(--accent);
+            border-radius: 50%; animation: spin .7s linear infinite; margin: 0 auto;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        /* Toast */
+        #toast-container {
+            position: fixed; top: 1rem; right: 1rem; z-index: 9999;
+            display: flex; flex-direction: column; gap: .5rem;
+        }
+        .toast {
+            display: flex; align-items: center; gap: .5rem;
+            padding: .7rem 1rem; border-radius: var(--radius-sm);
+            font-size: .85rem; font-weight: 500; color: #fff;
+            animation: slideIn .3s ease;
+            box-shadow: 0 4px 20px rgba(0,0,0,.4); min-width: 250px;
+        }
+        .toast i { width: 18px; height: 18px; flex-shrink: 0; }
+        .toast-success { background: #238636; }
+        .toast-error { background: #da3633; }
+        .toast-info { background: #1f6feb; }
+        .toast-warning { background: #9e6a03; }
+        @keyframes slideIn { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
+            .container { padding: 1rem; }
+            .navbar { gap: .75rem; padding: .6rem 1rem; }
+        }
+        @media (max-width: 480px) {
+            .grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
+        }
+    </style>
+    {% block extra_css %}<style></style>{% endblock %}
+</head>
+<body>
+
+<nav class="navbar">
+    <a href="/" class="brand"><i data-lucide="book-open"></i> MangaVault</a>
+    <a href="/" class="nav-link"><i data-lucide="home"></i> Home</a>
+    <a href="/search/" class="nav-link"><i data-lucide="search"></i> Search</a>
+    <a href="/library/" class="nav-link"><i data-lucide="library"></i> Library</a>
+</nav>
+
+<div id="toast-container"></div>
+
+<div class="container">
+    {% block content %}{% endblock %}
+</div>
+
+<script>
+/* Toast System */
+function showToast(message, type) {
+    type = type || 'info';
+    var container = document.getElementById('toast-container');
+    var toast = document.createElement('div');
+    toast.className = 'toast toast-' + type;
+
+    var iconMap = { success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle', info: 'info' };
+    var iconName = iconMap[type] || 'info';
+
+    toast.innerHTML = '<i data-lucide="' + iconName + '"></i><span>' + message + '</span>';
+    container.appendChild(toast);
+    lucide.createIcons({ nodes: [toast] });
+
+    setTimeout(function() {
+        toast.style.animation = 'slideIn .3s ease reverse forwards';
+        setTimeout(function() { toast.remove(); }, 300);
+    }, 4000);
+}
+
+/* Trigger a real browser file download */
+function triggerFileDownload(url) {
+    var a = document.createElement('a');
+    a.href = url;
+    a.download = '';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+}
+
+/* Lucide init */
+document.addEventListener('DOMContentLoaded', function() { lucide.createIcons(); });
+</script>
+
+{% block extra_js %}{% endblock %}
+
+</body>
+</html>

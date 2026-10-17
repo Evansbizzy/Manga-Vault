@@ -1,0 +1,153 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Search — MangaVault{% endblock %}
+
+{% block extra_css %}
+<style>
+.search-header { margin-bottom: 1.5rem; }
+.search-header h1 { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: .5rem; }
+.search-header h1 i { width: 22px; height: 22px; color: var(--accent); }
+.search-row { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+.search-row .input { flex: 1; min-width: 200px; }
+.import-box {
+    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
+    padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+}
+.import-box h3 { font-size: .9rem; font-weight: 700; margin-bottom: .3rem; display: flex; align-items: center; gap: .4rem; }
+.import-box h3 i { width: 16px; height: 16px; color: var(--accent-secondary); }
+.import-box p { font-size: .8rem; color: var(--text-muted); margin-bottom: .75rem; }
+.import-row { display: flex; gap: .5rem; flex-wrap: wrap; }
+.import-row .input { flex: 1; min-width: 200px; }
+.result-count { font-size: .85rem; color: var(--text-muted); margin-bottom: 1rem; display: flex; align-items: center; gap: .4rem; }
+.result-count i { width: 14px; height: 14px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="search-header">
+    <h1><i data-lucide="search"></i> Search Manga</h1>
+</div>
+
+<div class="search-row">
+    <input type="text" class="input" id="searchInput" placeholder="Search for manga, manhwa, manhua...">
+    <select class="select-styled" id="sourceSelect">
+        <option value="all">All Sources</option>
+    </select>
+    <button class="btn btn-primary" onclick="doSearch()"><i data-lucide="search"></i> Search</button>
+</div>
+
+<div class="import-box">
+    <h3><i data-lucide="link"></i> Import by URL</h3>
+    <p>Paste a manga or chapter URL. The app auto-detects the source.</p>
+    <div class="import-row">
+        <input type="text" class="input" id="importUrl" placeholder="Paste a manga or chapter URL...">
+        <select class="select-styled" id="importSource">
+            <option value="auto">Auto-detect</option>
+        </select>
+        <button class="btn btn-ghost" onclick="doImport()"><i data-lucide="download"></i> Import</button>
+    </div>
+</div>
+
+<div id="result-count" class="result-count" style="display:none"></div>
+<div id="results" class="grid"></div>
+<div id="loading" style="display:none;text-align:center;padding:3rem">
+    <div class="spinner" style="width:36px;height:36px;border-width:3px"></div>
+    <p style="margin-top:.75rem;color:var(--text-secondary)">Searching...</p>
+</div>
+<div id="empty-state" class="empty-state" style="display:none">
+    <div class="icon-wrap"><i data-lucide="search-x"></i></div>
+    <p>No results found. Try a different search term.</p>
+</div>
+
+<script>
+/* Populate source selectors */
+fetch('/api/sources/')
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        var sel = document.getElementById('sourceSelect');
+        var impSel = document.getElementById('importSource');
+        (data.sources || []).forEach(function(s) {
+            if (s.supports_search) sel.innerHTML += '<option value="' + s.name + '">' + s.label + '</option>';
+            if (s.supports_url_import) impSel.innerHTML += '<option value="' + s.name + '">' + s.label + '</option>';
+        });
+    });
+
+document.getElementById('searchInput').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doSearch();
+});
+document.getElementById('importUrl').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') doImport();
+});
+
+function doSearch() {
+    var q = document.getElementById('searchInput').value.trim();
+    var source = document.getElementById('sourceSelect').value;
+    if (!q) { showToast('Enter a search query', 'warning'); return; }
+
+    document.getElementById('results').innerHTML = '';
+    document.getElementById('loading').style.display = 'block';
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('result-count').style.display = 'none';
+
+    fetch('/api/search/?q=' + encodeURIComponent(q) + '&source=' + source)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+            document.getElementById('loading').style.display = 'none';
+            var items = data.results || [];
+            if (!items.length) {
+                document.getElementById('empty-state').style.display = 'block';
+                return;
+            }
+
+            var countEl = document.getElementById('result-count');
+            countEl.innerHTML = '<i data-lucide="hash"></i> ' + items.length + ' results found';
+            countEl.style.display = 'flex';
+            lucide.createIcons({ nodes: [countEl] });
+
+            var grid = document.getElementById('results');
+            items.forEach(function(r) {
+                var card = document.createElement('div');
+                card.className = 'card';
+                card.style.cursor = 'pointer';
+                card.onclick = function() { importManga(r.source, r.source_id); };
+                card.innerHTML =
+                    '<img src="' + (r.cover || '') + '" alt="' + r.title + '" loading="lazy" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>\'">' +
+                    '<div class="card-body"><h3>' + r.title + '</h3>' +
+                    '<div class="meta">' + (r.author || 'Unknown') + '</div>' +
+                    '<div style="margin-top:.4rem;display:flex;gap:.3rem;flex-wrap:wrap">' +
+                    '<span class="badge badge-accent">' + (r.content_type || 'manga').toUpperCase() + '</span>' +
+                    '<span class="badge badge-blue">' + (r.source || '').toUpperCase() + '</span>' +
+                    '</div></div>';
+                grid.appendChild(card);
+            });
+        })
+        .catch(function(err) {
+            document.getElementById('loading').style.display = 'none';
+            showToast('Search failed: ' + err.message, 'error');
+        });
+}
+
+function importManga(source, sourceId) {
+    showToast('Importing manga...', 'info');
+    fetch('/api/import/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ source: source, source_id: sourceId })
+    })
+    .then(function(r) { return r.json(); })
+    .then(function(data) {
+        if (data.error) { showToast(data.error, 'error'); return; }
+        showToast('Imported: ' + data.chapters + ' chapters', 'success');
+        setTimeout(function() { window.location.href = '/manga/' + data.manga_id + '/'; }, 800);
+    })
+    .catch(function(err) { showToast('Import failed: ' + err.message, 'error'); });
+}
+
+function doImport() {
+    var url = document.getElementById('importUrl').value.trim();
+    var source = document.getElementById('importSource').value;
+    if (!url) { showToast('Paste a URL first', 'warning'); return; }
+    importManga(source, url);
+}
+</script>
+{% endblock %}

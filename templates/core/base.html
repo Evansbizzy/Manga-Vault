@@ -5,10 +5,12 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}MangaVault{% endblock %}</title>
-    <meta name="description" content="Search, read, and download manga, manhwa, and manhua as CBZ archives.">
+    <meta name="description" content="{% block meta_description %}Search, read, and organize manga, manhwa, and manhua in your personal MangaVault.{% endblock %}">
+    {% if SITE_URL %}<link rel="canonical" href="{{ SITE_URL }}{{ request.path }}">{% endif %}
+    <meta name="robots" content="{% block robots %}index,follow{% endblock %}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-    <script src="https://unpkg.com/lucide@latest"></script>
+    <script defer src="https://unpkg.com/lucide@latest" onerror="window.lucide={createIcons:function(){}}"></script>
     <style>
         /* Reset & Tokens */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
@@ -62,6 +64,10 @@
 
         /* Container */
         .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+        .breadcrumbs { margin: 0 0 1rem; color: var(--text-muted); font-size: .8rem; }
+        .breadcrumbs ol { display: flex; flex-wrap: wrap; gap: .45rem; list-style: none; }
+        .breadcrumbs li + li::before { content: '/'; margin-right: .45rem; color: var(--text-muted); }
+        .breadcrumbs a { color: var(--text-secondary); }
 
         /* Grid */
         .grid {
@@ -178,11 +184,13 @@
     <a href="/" class="nav-link"><i data-lucide="home"></i> Home</a>
     <a href="/search/" class="nav-link"><i data-lucide="search"></i> Search</a>
     <a href="/library/" class="nav-link"><i data-lucide="library"></i> Library</a>
+    {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}" style="margin-left:auto">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit">Sign out</button></form>{% endif %}
 </nav>
 
 <div id="toast-container"></div>
 
 <div class="container">
+    {% block breadcrumbs %}{% endblock %}
     {% block content %}{% endblock %}
 </div>
 
@@ -197,7 +205,11 @@ function showToast(message, type) {
     var iconMap = { success: 'check-circle', error: 'alert-circle', warning: 'alert-triangle', info: 'info' };
     var iconName = iconMap[type] || 'info';
 
-    toast.innerHTML = '<i data-lucide="' + iconName + '"></i><span>' + message + '</span>';
+    var icon = document.createElement('i');
+    icon.setAttribute('data-lucide', iconName);
+    var text = document.createElement('span');
+    text.textContent = message;
+    toast.append(icon, text);
     container.appendChild(toast);
     lucide.createIcons({ nodes: [toast] });
 
@@ -215,6 +227,20 @@ function triggerFileDownload(url) {
     document.body.appendChild(a);
     a.click();
     document.body.removeChild(a);
+}
+
+function apiFetch(url, options) {
+    options = options || {};
+    var method = (options.method || 'GET').toUpperCase();
+    if (!['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(method)) {
+        var token = document.cookie.split('; ').find(function(item) { return item.startsWith('csrftoken='); });
+        if (token) {
+            var headers = new Headers(options.headers || {});
+            headers.set('X-CSRFToken', decodeURIComponent(token.split('=').slice(1).join('=')));
+            options.headers = headers;
+        }
+    }
+    return fetch(url, options);
 }
 
 /* Lucide init */

@@ -1,6 +1,9 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Library — MangaVault{% endblock %}
+{% block title %}My Library | MangaVault{% endblock %}
+{% block meta_description %}Browse your saved manga, manhwa, and downloaded chapters in your MangaVault library.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Library</li></ol></nav>{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -13,6 +16,7 @@
 .stat .label { font-size: .72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: .5px; }
 .filter-bar { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .filter-bar .input { flex: 1; min-width: 200px; }
+.filter-bar .select-styled { min-width: 145px; }
 </style>
 {% endblock %}
 
@@ -20,13 +24,21 @@
 <div class="library-header">
     <h1><i data-lucide="library"></i> My Library</h1>
     <div class="library-stats">
-        <div class="stat"><div class="num" id="total-count">&mdash;</div><div class="label">Manga</div></div>
-        <div class="stat"><div class="num" id="downloaded-count">&mdash;</div><div class="label">Downloaded</div></div>
+        <div class="stat"><div class="num" id="total-count">0</div><div class="label">Manga</div></div>
+        <div class="stat"><div class="num" id="downloaded-count">0</div><div class="label">Downloaded</div></div>
     </div>
 </div>
 
 <div class="filter-bar">
-    <input type="text" class="input" id="filterInput" placeholder="Filter library...">
+    <input type="search" class="input" id="filterInput" placeholder="Filter library..." aria-label="Search your library">
+    <select class="select-styled" id="typeFilter" aria-label="Filter by format"><option value="">All formats</option></select>
+    <select class="select-styled" id="sourceFilter" aria-label="Filter by source"><option value="">All sources</option></select>
+    <select class="select-styled" id="sortFilter" aria-label="Sort library">
+        <option value="recent">Recently added</option>
+        <option value="title">Title A to Z</option>
+        <option value="title-desc">Title Z to A</option>
+        <option value="progress">Most downloaded</option>
+    </select>
 </div>
 
 <div id="library-grid" class="grid"></div>
@@ -40,7 +52,7 @@ var allManga = [];
 
 function renderLibrary(items) {
     var grid = document.getElementById('library-grid');
-    grid.innerHTML = '';
+    grid.replaceChildren();
     if (!items.length) {
         document.getElementById('empty-state').style.display = 'block';
         return;
@@ -48,16 +60,44 @@ function renderLibrary(items) {
     document.getElementById('empty-state').style.display = 'none';
     items.forEach(function(m) {
         var card = document.createElement('a');
-        card.href = '/manga/' + m.id + '/';
+        card.href = m.reading
+            ? '/reader/' + m.reading.chapter_id + '/?page=' + m.reading.page
+            : '/manga/' + m.id + '/';
         card.className = 'card';
-        card.innerHTML =
-            '<img src="' + m.cover + '" alt="' + m.title + '" loading="lazy" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>\'">' +
-            '<div class="card-body"><h3>' + m.title + '</h3>' +
-            '<div class="meta">' + m.downloaded + '/' + m.chapters + ' chapters</div>' +
-            '<div style="margin-top:.4rem;display:flex;gap:.3rem;flex-wrap:wrap">' +
-            '<span class="badge badge-accent">' + (m.content_type || 'manga').toUpperCase() + '</span>' +
-            '<span class="badge badge-muted">' + (m.source || '').toUpperCase() + '</span>' +
-            '</div></div>';
+        var image = document.createElement('img');
+        image.src = m.cover || '';
+        image.alt = m.title || 'Manga cover';
+        image.loading = 'lazy';
+        image.addEventListener('error', function() {
+            image.removeAttribute('src');
+            image.alt = 'Cover unavailable';
+            image.classList.add('cover-unavailable');
+        }, { once: true });
+
+        var body = document.createElement('div');
+        body.className = 'card-body';
+        var title = document.createElement('h3');
+        title.textContent = m.title || 'Untitled';
+        var chapterCount = document.createElement('div');
+        chapterCount.className = 'meta';
+        chapterCount.textContent = (m.downloaded || 0) + '/' + (m.chapters || 0) + ' chapters';
+        if (m.reading) {
+            var reading = document.createElement('div');
+            reading.className = 'meta';
+            reading.textContent = 'Continue: Ch. ' + m.reading.chapter_number + ', page ' + (m.reading.page + 1);
+            body.appendChild(reading);
+        }
+        var badges = document.createElement('div');
+        badges.style.cssText = 'margin-top:.4rem;display:flex;gap:.3rem;flex-wrap:wrap';
+        var typeBadge = document.createElement('span');
+        typeBadge.className = 'badge badge-accent';
+        typeBadge.textContent = (m.content_type || 'manga').toUpperCase();
+        var sourceBadge = document.createElement('span');
+        sourceBadge.className = 'badge badge-muted';
+        sourceBadge.textContent = (m.source || '').toUpperCase();
+        badges.append(typeBadge, sourceBadge);
+        body.append(title, chapterCount, badges);
+        card.append(image, body);
         grid.appendChild(card);
     });
 }
@@ -68,13 +108,42 @@ fetch('/api/library/')
         allManga = data.manga;
         document.getElementById('total-count').textContent = allManga.length;
         document.getElementById('downloaded-count').textContent = allManga.filter(function(m) { return m.downloaded > 0; }).length;
-        renderLibrary(allManga);
+        populateFilter('typeFilter', allManga.map(function(m) { return m.content_type; }));
+        populateFilter('sourceFilter', allManga.map(function(m) { return m.source; }));
+        applyLibraryFilters();
     })
     .catch(function() { showToast('Failed to load library', 'error'); });
 
-document.getElementById('filterInput').addEventListener('input', function(e) {
-    var q = e.target.value.toLowerCase();
-    renderLibrary(allManga.filter(function(m) { return m.title.toLowerCase().indexOf(q) !== -1; }));
+function populateFilter(id, values) {
+    var select = document.getElementById(id);
+    Array.from(new Set(values.filter(Boolean))).sort().forEach(function(value) {
+        var option = document.createElement('option');
+        option.value = value;
+        option.textContent = value.charAt(0).toUpperCase() + value.slice(1);
+        select.appendChild(option);
+    });
+}
+
+function applyLibraryFilters() {
+    var query = document.getElementById('filterInput').value.trim().toLowerCase();
+    var type = document.getElementById('typeFilter').value;
+    var source = document.getElementById('sourceFilter').value;
+    var sort = document.getElementById('sortFilter').value;
+    var matches = allManga.filter(function(manga) {
+        return (!query || manga.title.toLowerCase().includes(query)) &&
+            (!type || manga.content_type === type) && (!source || manga.source === source);
+    });
+    matches.sort(function(a, b) {
+        if (sort === 'title') return a.title.localeCompare(b.title);
+        if (sort === 'title-desc') return b.title.localeCompare(a.title);
+        if (sort === 'progress') return (b.downloaded || 0) - (a.downloaded || 0);
+        return 0;
+    });
+    renderLibrary(matches);
+}
+
+['filterInput', 'typeFilter', 'sourceFilter', 'sortFilter'].forEach(function(id) {
+    document.getElementById(id).addEventListener(id === 'filterInput' ? 'input' : 'change', applyLibraryFilters);
 });
 </script>
 {% endblock %}

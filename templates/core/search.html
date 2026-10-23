@@ -1,153 +1,351 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Search — MangaVault{% endblock %}
+{% block title %}Discover Manga | MangaVault{% endblock %}
+{% block meta_description %}Search manga, manhwa, and manhua across supported sources, then add series to your personal library.{% endblock %}
+{% block robots %}noindex,follow{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Discover</li></ol></nav>{% endblock %}
 
 {% block extra_css %}
 <style>
-.search-header { margin-bottom: 1.5rem; }
-.search-header h1 { font-size: 1.4rem; font-weight: 700; display: flex; align-items: center; gap: .5rem; }
-.search-header h1 i { width: 22px; height: 22px; color: var(--accent); }
-.search-row { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
-.search-row .input { flex: 1; min-width: 200px; }
-.import-box {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 1rem 1.25rem; margin-bottom: 1.5rem;
+.discovery { max-width: 1180px; margin: 0 auto; }
+.discovery-head { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, .58fr); gap: 2rem; align-items: end; padding: 2.3rem 0 1.8rem; }
+.discovery-head h1 { max-width: 12ch; font-size: clamp(2.5rem, 6vw, 4.6rem); line-height: .98; letter-spacing: -.065em; font-weight: 800; }
+.discovery-head h1 span { color: var(--accent); }
+.discovery-head p { max-width: 34ch; color: var(--text-secondary); font-size: .98rem; line-height: 1.7; }
+.search-panel { padding: .65rem; border: 1px solid var(--border); border-radius: 14px; background: var(--bg-secondary); display: grid; grid-template-columns: minmax(0, 1fr) 180px auto; gap: .5rem; box-shadow: 0 18px 48px rgba(0,0,0,.18); }
+.search-panel .input, .search-panel .select-styled { min-width: 0; width: 100%; min-height: 48px; }
+.search-panel .input { border-color: transparent; background: transparent; }
+.search-panel .input:focus { border-color: var(--accent); background: var(--bg-primary); }
+.search-panel .btn { justify-content: center; min-height: 48px; white-space: nowrap; }
+.search-hint { color: var(--text-muted); font-size: .78rem; margin: .65rem .25rem 2rem; }
+.import-panel { display: grid; grid-template-columns: minmax(180px, .7fr) minmax(0, 1.3fr); align-items: center; gap: 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); padding: 1.2rem .1rem; margin-bottom: 2rem; }
+.import-copy h2 { font-size: .98rem; font-weight: 700; }
+.import-copy p { margin-top: .25rem; color: var(--text-muted); font-size: .8rem; }
+.import-row { display: grid; grid-template-columns: minmax(0, 1fr) 170px auto; gap: .5rem; }
+.import-row .input, .import-row .select-styled { min-width: 0; width: 100%; }
+.section-bar { display: flex; justify-content: space-between; align-items: center; gap: 1rem; min-height: 34px; margin-bottom: .8rem; }
+.section-bar h2 { font-size: 1rem; font-weight: 700; }
+.result-count { color: var(--text-muted); font-size: .8rem; }
+.source-report { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.2rem; }
+.source-chip { color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: .28rem .65rem; font-size: .7rem; }
+.source-chip.failed { color: #ff9b93; border-color: rgba(248,81,73,.45); }
+.results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+.result-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: inherit; text-align: left; padding: 0; cursor: pointer; transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; animation: card-in .34s both; animation-delay: calc(var(--card-index, 0) * 24ms); }
+.result-card:hover { transform: translateY(-4px); border-color: rgba(248,81,73,.55); box-shadow: 0 16px 34px rgba(0,0,0,.24); }
+.result-card:active { transform: translateY(-1px) scale(.99); }
+.result-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+.result-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #202631; }
+.cover-fallback { display: grid; place-items: center; width: 100%; aspect-ratio: 2 / 3; padding: 1rem; background: linear-gradient(145deg, #242d39, #171c25); color: var(--text-muted); text-align: center; font-size: .8rem; }
+.result-info { padding: .75rem; }
+.result-info h3 { min-height: 2.5em; color: var(--text-primary); font-size: .87rem; line-height: 1.3; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.result-author { overflow: hidden; margin-top: .3rem; color: var(--text-muted); font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
+.result-meta { display: flex; justify-content: space-between; align-items: center; gap: .4rem; margin-top: .75rem; }
+.result-source { color: var(--text-secondary); font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; }
+.result-type { color: var(--accent); font-size: .64rem; font-weight: 700; text-transform: uppercase; }
+.search-state { padding: 3.5rem 1rem; color: var(--text-secondary); text-align: center; }
+.search-state h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: .35rem; }
+.search-state p { font-size: .85rem; }
+.search-state[hidden], .results-grid[hidden], .source-report[hidden], .section-bar[hidden] { display: none; }
+.skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
+.skeleton-card { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); }
+.skeleton-cover { aspect-ratio: 2 / 3; background: linear-gradient(100deg, #202631 25%, #2a3340 42%, #202631 60%); background-size: 220% 100%; animation: shimmer 1.3s linear infinite; }
+.skeleton-line { height: 10px; margin: .8rem .7rem; border-radius: 6px; background: #2a3340; }
+.skeleton-line.short { width: 55%; margin-top: .55rem; }
+.url-error { min-height: 1.2rem; margin-top: .35rem; color: #ff9b93; font-size: .78rem; }
+@keyframes shimmer { to { background-position-x: -220%; } }
+@keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@media (max-width: 760px) {
+    .discovery-head { grid-template-columns: 1fr; gap: .8rem; padding-top: 1.6rem; }
+    .discovery-head h1 { max-width: 11ch; }
+    .search-panel { grid-template-columns: minmax(0, 1fr) auto; }
+    .search-panel .input { grid-column: 1 / -1; }
+    .search-panel .select-styled { grid-column: 1; }
+    .search-panel .btn { grid-column: 2; }
+    .import-panel { grid-template-columns: 1fr; gap: .8rem; }
+    .import-row { grid-template-columns: minmax(0, 1fr) auto; }
+    .import-row .input { grid-column: 1 / -1; }
+    .import-row .select-styled { grid-column: 1; }
+    .import-row .btn { grid-column: 2; }
 }
-.import-box h3 { font-size: .9rem; font-weight: 700; margin-bottom: .3rem; display: flex; align-items: center; gap: .4rem; }
-.import-box h3 i { width: 16px; height: 16px; color: var(--accent-secondary); }
-.import-box p { font-size: .8rem; color: var(--text-muted); margin-bottom: .75rem; }
-.import-row { display: flex; gap: .5rem; flex-wrap: wrap; }
-.import-row .input { flex: 1; min-width: 200px; }
-.result-count { font-size: .85rem; color: var(--text-muted); margin-bottom: 1rem; display: flex; align-items: center; gap: .4rem; }
-.result-count i { width: 14px; height: 14px; }
+@media (max-width: 420px) {
+    .results-grid, .skeleton-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .65rem; }
+    .search-panel { grid-template-columns: minmax(0, 1fr); }
+    .search-panel .input, .search-panel .select-styled, .search-panel .btn { grid-column: 1; }
+    .import-row { grid-template-columns: minmax(0, 1fr); }
+    .import-row .input, .import-row .select-styled, .import-row .btn { grid-column: 1; }
+    .section-bar { align-items: flex-start; flex-direction: column; gap: .2rem; }
+}
+@media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="search-header">
-    <h1><i data-lucide="search"></i> Search Manga</h1>
-</div>
+<main class="discovery">
+    <header class="discovery-head">
+        <h1>Find your next <span>series.</span></h1>
+        <p>Search across manga sources in one place. Open a result to add its chapters to your library.</p>
+    </header>
 
-<div class="search-row">
-    <input type="text" class="input" id="searchInput" placeholder="Search for manga, manhwa, manhua...">
-    <select class="select-styled" id="sourceSelect">
-        <option value="all">All Sources</option>
-    </select>
-    <button class="btn btn-primary" onclick="doSearch()"><i data-lucide="search"></i> Search</button>
-</div>
-
-<div class="import-box">
-    <h3><i data-lucide="link"></i> Import by URL</h3>
-    <p>Paste a manga or chapter URL. The app auto-detects the source.</p>
-    <div class="import-row">
-        <input type="text" class="input" id="importUrl" placeholder="Paste a manga or chapter URL...">
-        <select class="select-styled" id="importSource">
-            <option value="auto">Auto-detect</option>
+    <form class="search-panel" id="searchForm">
+        <input type="search" class="input" id="searchInput" placeholder="Search by title, like One Piece" aria-label="Manga title" maxlength="200" required>
+        <select class="select-styled" id="sourceSelect" aria-label="Search source">
+            <option value="all">All searchable sources</option>
         </select>
-        <button class="btn btn-ghost" onclick="doImport()"><i data-lucide="download"></i> Import</button>
+        <button class="btn btn-primary" type="submit"><i data-lucide="search"></i> Search</button>
+    </form>
+    <p class="search-hint">Searching all sources runs them together. Results can vary when a site is unavailable.</p>
+
+    <section class="import-panel" aria-labelledby="import-heading">
+        <div class="import-copy">
+            <h2 id="import-heading">Have a manga link?</h2>
+            <p>Paste a supported manga or chapter URL to import it directly.</p>
+        </div>
+        <form class="import-row" id="importForm">
+            <input type="url" class="input" id="importUrl" placeholder="https://example.com/manga/..." aria-label="Manga or chapter URL" required>
+            <select class="select-styled" id="importSource" aria-label="Import source">
+                <option value="auto">Auto-detect</option>
+            </select>
+            <button class="btn btn-ghost" type="submit">Import link</button>
+        </form>
+        <p class="url-error" id="urlError" role="status" aria-live="polite"></p>
+    </section>
+
+    <div class="section-bar" id="results-heading" hidden>
+        <h2 id="results-title">Search results</h2>
+        <span class="result-count" id="result-count"></span>
     </div>
-</div>
+    <div class="source-report" id="source-report" aria-live="polite" hidden></div>
+    <div class="skeleton-grid" id="loading" aria-label="Searching sources" hidden>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+        <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
+    </div>
+    <div class="results-grid" id="results" hidden></div>
+    <div class="search-state" id="search-state" role="status" aria-live="polite">
+        <h3>Search across your sources</h3>
+        <p>Enter a title above to see matching series.</p>
+    </div>
+</main>
+{% endblock %}
 
-<div id="result-count" class="result-count" style="display:none"></div>
-<div id="results" class="grid"></div>
-<div id="loading" style="display:none;text-align:center;padding:3rem">
-    <div class="spinner" style="width:36px;height:36px;border-width:3px"></div>
-    <p style="margin-top:.75rem;color:var(--text-secondary)">Searching...</p>
-</div>
-<div id="empty-state" class="empty-state" style="display:none">
-    <div class="icon-wrap"><i data-lucide="search-x"></i></div>
-    <p>No results found. Try a different search term.</p>
-</div>
-
+{% block extra_js %}
 <script>
-/* Populate source selectors */
+var activeSearch = null;
+var sourceLabels = {};
+
 fetch('/api/sources/')
-    .then(function(r) { return r.json(); })
+    .then(function(response) {
+        if (!response.ok) throw new Error('Could not load manga sources');
+        return response.json();
+    })
     .then(function(data) {
-        var sel = document.getElementById('sourceSelect');
-        var impSel = document.getElementById('importSource');
-        (data.sources || []).forEach(function(s) {
-            if (s.supports_search) sel.innerHTML += '<option value="' + s.name + '">' + s.label + '</option>';
-            if (s.supports_url_import) impSel.innerHTML += '<option value="' + s.name + '">' + s.label + '</option>';
+        var searchSelect = document.getElementById('sourceSelect');
+        var importSelect = document.getElementById('importSource');
+        (data.sources || []).forEach(function(source) {
+            sourceLabels[source.name] = source.label;
+            if (source.supports_search) searchSelect.add(new Option(source.label, source.name));
+            if (source.supports_url_import) importSelect.add(new Option(source.label, source.name));
         });
+    })
+    .catch(function() {
+        showToast('Source list could not be loaded. Try refreshing the page.', 'error');
     });
 
-document.getElementById('searchInput').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doSearch();
+document.getElementById('searchForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    doSearch();
 });
-document.getElementById('importUrl').addEventListener('keydown', function(e) {
-    if (e.key === 'Enter') doImport();
+
+document.getElementById('importForm').addEventListener('submit', function(event) {
+    event.preventDefault();
+    doImport();
 });
+
+function setSearchState(title, description) {
+    var state = document.getElementById('search-state');
+    state.replaceChildren();
+    var heading = document.createElement('h3');
+    var message = document.createElement('p');
+    heading.textContent = title;
+    message.textContent = description;
+    state.append(heading, message);
+    state.hidden = false;
+}
 
 function doSearch() {
-    var q = document.getElementById('searchInput').value.trim();
+    var query = document.getElementById('searchInput').value.trim();
     var source = document.getElementById('sourceSelect').value;
-    if (!q) { showToast('Enter a search query', 'warning'); return; }
+    if (!query) {
+        document.getElementById('searchInput').focus();
+        return;
+    }
 
-    document.getElementById('results').innerHTML = '';
-    document.getElementById('loading').style.display = 'block';
-    document.getElementById('empty-state').style.display = 'none';
-    document.getElementById('result-count').style.display = 'none';
+    if (activeSearch) activeSearch.abort();
+    activeSearch = new AbortController();
+    document.getElementById('results').replaceChildren();
+    document.getElementById('results').hidden = true;
+    document.getElementById('source-report').replaceChildren();
+    document.getElementById('source-report').hidden = true;
+    document.getElementById('results-heading').hidden = true;
+    document.getElementById('search-state').hidden = true;
+    document.getElementById('loading').hidden = false;
 
-    fetch('/api/search/?q=' + encodeURIComponent(q) + '&source=' + source)
-        .then(function(r) { return r.json(); })
-        .then(function(data) {
-            document.getElementById('loading').style.display = 'none';
-            var items = data.results || [];
-            if (!items.length) {
-                document.getElementById('empty-state').style.display = 'block';
-                return;
-            }
-
-            var countEl = document.getElementById('result-count');
-            countEl.innerHTML = '<i data-lucide="hash"></i> ' + items.length + ' results found';
-            countEl.style.display = 'flex';
-            lucide.createIcons({ nodes: [countEl] });
-
-            var grid = document.getElementById('results');
-            items.forEach(function(r) {
-                var card = document.createElement('div');
-                card.className = 'card';
-                card.style.cursor = 'pointer';
-                card.onclick = function() { importManga(r.source, r.source_id); };
-                card.innerHTML =
-                    '<img src="' + (r.cover || '') + '" alt="' + r.title + '" loading="lazy" onerror="this.src=\'data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>\'">' +
-                    '<div class="card-body"><h3>' + r.title + '</h3>' +
-                    '<div class="meta">' + (r.author || 'Unknown') + '</div>' +
-                    '<div style="margin-top:.4rem;display:flex;gap:.3rem;flex-wrap:wrap">' +
-                    '<span class="badge badge-accent">' + (r.content_type || 'manga').toUpperCase() + '</span>' +
-                    '<span class="badge badge-blue">' + (r.source || '').toUpperCase() + '</span>' +
-                    '</div></div>';
-                grid.appendChild(card);
+    fetch('/api/search/?q=' + encodeURIComponent(query) + '&source=' + encodeURIComponent(source), {
+        signal: activeSearch.signal
+    })
+        .then(function(response) {
+            return response.json().then(function(data) {
+                if (!response.ok) throw new Error(data.error || 'Search could not be completed');
+                return data;
             });
         })
-        .catch(function(err) {
-            document.getElementById('loading').style.display = 'none';
-            showToast('Search failed: ' + err.message, 'error');
+        .then(function(data) {
+            document.getElementById('loading').hidden = true;
+            renderSourceReport(data.source_status || []);
+            renderResults(data.results || [], query);
+        })
+        .catch(function(error) {
+            if (error.name === 'AbortError') return;
+            document.getElementById('loading').hidden = true;
+            setSearchState('Search could not finish', error.message || 'Check your connection and try again.');
         });
 }
 
+function renderSourceReport(sources) {
+    var report = document.getElementById('source-report');
+    report.replaceChildren();
+    if (!sources.length) return;
+    sources.forEach(function(source) {
+        var chip = document.createElement('span');
+        chip.className = 'source-chip' + (source.status === 'error' ? ' failed' : '');
+        chip.textContent = source.status === 'error'
+            ? source.label + ': unavailable'
+            : source.label + ': ' + source.count;
+        if (source.message) chip.title = source.message;
+        report.appendChild(chip);
+    });
+    report.hidden = false;
+}
+
+function renderResults(items, query) {
+    var results = document.getElementById('results');
+    var failedSources = document.querySelectorAll('.source-chip.failed').length;
+    var successfulSources = document.querySelectorAll('.source-chip:not(.failed)').length;
+    if (!items.length) {
+        if (failedSources && !successfulSources) {
+            setSearchState('Sources could not be reached', 'Try again in a moment or choose one source from the menu.');
+        } else {
+            var emptyMessage = failedSources
+                ? 'No matches came from reachable sources. Some sites could not be searched.'
+                : 'Try another spelling or search a specific source.';
+            setSearchState('No matches for “' + query + '”', emptyMessage);
+        }
+        return;
+    }
+
+    document.getElementById('results-heading').hidden = false;
+    document.getElementById('result-count').textContent = items.length + (items.length === 1 ? ' result' : ' results');
+    items.forEach(function(item, index) {
+        var button = document.createElement('button');
+        button.type = 'button';
+        button.className = 'result-card';
+        button.style.setProperty('--card-index', index);
+        button.setAttribute('aria-label', 'Import ' + item.title + ' from ' + (sourceLabels[item.source] || item.source));
+        button.addEventListener('click', function() { importManga(item.source, item.source_id); });
+
+        var coverUrl = safeHttpUrl(item.cover);
+        if (coverUrl) {
+            var image = document.createElement('img');
+            image.className = 'result-cover';
+            image.src = coverUrl;
+            image.alt = '';
+            image.loading = 'lazy';
+            image.addEventListener('error', function() {
+                var fallback = document.createElement('div');
+                fallback.className = 'cover-fallback';
+                fallback.textContent = 'Cover unavailable';
+                image.replaceWith(fallback);
+            }, { once: true });
+            button.appendChild(image);
+        } else {
+            var placeholder = document.createElement('div');
+            placeholder.className = 'cover-fallback';
+            placeholder.textContent = 'Cover unavailable';
+            button.appendChild(placeholder);
+        }
+
+        var info = document.createElement('div');
+        info.className = 'result-info';
+        var title = document.createElement('h3');
+        title.textContent = item.title || 'Untitled';
+        var author = document.createElement('p');
+        author.className = 'result-author';
+        author.textContent = item.author || 'Author unknown';
+        var metadata = document.createElement('div');
+        metadata.className = 'result-meta';
+        var type = document.createElement('span');
+        type.className = 'result-type';
+        type.textContent = item.content_type || 'manga';
+        var source = document.createElement('span');
+        source.className = 'result-source';
+        source.textContent = sourceLabels[item.source] || item.source || 'Source';
+        metadata.append(type, source);
+        info.append(title, author, metadata);
+        button.appendChild(info);
+        results.appendChild(button);
+    });
+    results.hidden = false;
+}
+
+function safeHttpUrl(value) {
+    if (typeof value !== 'string' || !value.trim()) return '';
+    try {
+        var parsed = new URL(value, window.location.origin);
+        return parsed.protocol === 'http:' || parsed.protocol === 'https:' ? parsed.href : '';
+    } catch (error) {
+        return '';
+    }
+}
+
 function importManga(source, sourceId) {
-    showToast('Importing manga...', 'info');
-    fetch('/api/import/', {
+    showToast('Importing series...', 'info');
+    apiFetch('/api/import/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: source, source_id: sourceId })
     })
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-        if (data.error) { showToast(data.error, 'error'); return; }
-        showToast('Imported: ' + data.chapters + ' chapters', 'success');
-        setTimeout(function() { window.location.href = '/manga/' + data.manga_id + '/'; }, 800);
-    })
-    .catch(function(err) { showToast('Import failed: ' + err.message, 'error'); });
+        .then(function(response) {
+            return response.json().then(function(data) {
+                if (!response.ok || data.error) throw new Error(data.error || 'Import failed');
+                return data;
+            });
+        })
+        .then(function(data) {
+            var message = data.status === 'exists' ? 'Already in your library' : 'Series added to your library';
+            showToast(message, 'success');
+            window.setTimeout(function() { window.location.href = '/manga/' + data.manga_id + '/'; }, 500);
+        })
+        .catch(function(error) { showToast(error.message || 'Import failed', 'error'); });
 }
 
 function doImport() {
     var url = document.getElementById('importUrl').value.trim();
-    var source = document.getElementById('importSource').value;
-    if (!url) { showToast('Paste a URL first', 'warning'); return; }
-    importManga(source, url);
+    var error = document.getElementById('urlError');
+    error.textContent = '';
+    try {
+        var parsed = new URL(url);
+        if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error();
+    } catch (exception) {
+        error.textContent = 'Enter a valid link starting with http:// or https://.';
+        document.getElementById('importUrl').focus();
+        return;
+    }
+    importManga(document.getElementById('importSource').value, url);
 }
 </script>
 {% endblock %}

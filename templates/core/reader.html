@@ -1,6 +1,15 @@
 {% extends 'core/base.html' %}
 
-{% block title %}Ch. {{ chapter.chapter_number }} — {{ manga.title }} — MangaVault{% endblock %}
+{% block title %}Chapter {{ chapter.chapter_number }} | {{ manga.title }} | MangaVault{% endblock %}
+{% block meta_description %}Read chapter {{ chapter.chapter_number }}{% if chapter.title %}: {{ chapter.title }}{% endif %} of {{ manga.title }} in the MangaVault reader.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>
+    <li><a href="{% url 'index' %}">Home</a></li>
+    <li><a href="{% url 'manga_detail' manga.id %}">{{ manga.title }}</a></li>
+    <li aria-current="page">Chapter {{ chapter.chapter_number }}</li>
+</ol></nav>
+{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -36,8 +45,8 @@
 <div class="reader-nav">
     <a href="/manga/{{ manga.id }}/" class="btn btn-ghost btn-sm"><i data-lucide="arrow-left"></i> Back</a>
     <div class="info">
-        <h2>{{ manga.title }}</h2>
-        <div class="sub">Chapter {{ chapter.chapter_number }}{% if chapter.title %} — {{ chapter.title }}{% endif %}</div>
+        <h1>{{ manga.title }}</h1>
+        <div class="sub">Chapter {{ chapter.chapter_number }}{% if chapter.title %} - {{ chapter.title }}{% endif %}</div>
     </div>
     <div class="reader-modes">
         <button onclick="setMode('scroll')" id="mode-scroll" class="active">Scroll</button>
@@ -63,12 +72,18 @@ var chapterId = {{ chapter.id }};
 var pages = [];
 var currentPage = 0;
 var mode = 'scroll';
+var canSyncProgress = {{ user.is_authenticated|yesno:'true,false' }};
+var progressStorageKey = 'mangavault-progress-' + chapterId;
+var progressSaveTimer;
 
 fetch('/api/chapter/' + chapterId + '/pages/')
     .then(function(r) { return r.json(); })
     .then(function(data) {
         if (data.error) {
-            document.getElementById('reader-loading').innerHTML = '<p style="color:var(--accent)">' + data.error + '</p>';
+            var errorMessage = document.createElement('p');
+            errorMessage.style.color = 'var(--accent)';
+            errorMessage.textContent = data.error;
+            document.getElementById('reader-loading').replaceChildren(errorMessage);
             return;
         }
 
@@ -76,7 +91,10 @@ fetch('/api/chapter/' + chapterId + '/pages/')
         document.getElementById('reader-loading').style.display = 'none';
 
         if (!pages.length) {
-            document.getElementById('viewport').innerHTML = '<div class="empty-state"><div class="icon-wrap"><i data-lucide="image-off"></i></div><p>No pages found for this chapter.</p></div>';
+            var empty = document.createElement('div');
+            empty.className = 'empty-state';
+            empty.textContent = 'No pages found for this chapter.';
+            document.getElementById('viewport').replaceChildren(empty);
             document.getElementById('viewport').style.display = 'block';
             lucide.createIcons();
             return;
@@ -113,9 +131,13 @@ fetch('/api/chapter/' + chapterId + '/pages/')
         }
 
         lucide.createIcons();
+        restoreReadingProgress();
     })
     .catch(function(err) {
-        document.getElementById('reader-loading').innerHTML = '<p style="color:var(--accent)">Failed to load: ' + err.message + '</p>';
+        var errorMessage = document.createElement('p');
+        errorMessage.style.color = 'var(--accent)';
+        errorMessage.textContent = 'Failed to load: ' + err.message;
+        document.getElementById('reader-loading').replaceChildren(errorMessage);
     });
 
 function setMode(m) {
@@ -132,10 +154,10 @@ function setMode(m) {
     } else {
         vp.className = 'reader-viewport mode-single';
         var imgs = vp.querySelectorAll('img');
-        currentPage = 0;
+        currentPage = Math.min(currentPage, Math.max(pages.length - 1, 0));
         imgs.forEach(function(img, i) {
             img.style.display = '';
-            img.classList.toggle('active-page', i === 0);
+            img.classList.toggle('active-page', i === currentPage);
         });
         updatePageInfo();
     }
@@ -156,8 +178,65 @@ function goToPage(delta) {
     currentPage = next;
     imgs[currentPage].classList.add('active-page');
     updatePageInfo();
+    saveReadingProgress();
     window.scrollTo(0, 0);
 }
+
+function applyReadingProgress(progress) {
+    var pageFromUrl = new URLSearchParams(window.location.search).get('page');
+    var savedPage = pageFromUrl === null ? progress.current_page : Number(pageFromUrl);
+    currentPage = Number.isInteger(savedPage) ? Math.max(0, Math.min(savedPage, pages.length - 1)) : 0;
+    setMode(currentPage > 0 ? 'single' : 'scroll');
+}
+
+function restoreReadingProgress() {
+    if (!canSyncProgress) {
+        try {
+            applyReadingProgress(JSON.parse(localStorage.getItem(progressStorageKey) || '{"current_page":0}'));
+        } catch (error) {
+            applyReadingProgress({ current_page: 0 });
+        }
+        return;
+    }
+    apiFetch('/api/chapter/' + chapterId + '/progress/')
+        .then(function(response) { return response.ok ? response.json() : { current_page: 0 }; })
+        .then(applyReadingProgress)
+        .catch(function() { applyReadingProgress({ current_page: 0 }); });
+}
+
+function saveReadingProgress() {
+    if (!pages.length) return;
+    var progress = {
+        current_page: currentPage,
+        completed: currentPage >= pages.length - 1
+    };
+    if (!canSyncProgress) {
+        localStorage.setItem(progressStorageKey, JSON.stringify(progress));
+        return;
+    }
+    window.clearTimeout(progressSaveTimer);
+    progressSaveTimer = window.setTimeout(function() {
+        apiFetch('/api/chapter/' + chapterId + '/progress/', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(progress)
+        }).catch(function() {});
+    }, 1500);
+}
+
+window.addEventListener('scroll', function() {
+    if (mode !== 'scroll') return;
+    var imgs = document.getElementById('viewport').querySelectorAll('img');
+    for (var index = 0; index < imgs.length; index++) {
+        if (imgs[index].getBoundingClientRect().bottom > 150) {
+            if (currentPage !== index) {
+                currentPage = index;
+                saveReadingProgress();
+            }
+            break;
+        }
+    }
+}, { passive: true });
 
 document.addEventListener('keydown', function(e) {
     if (mode === 'single') {

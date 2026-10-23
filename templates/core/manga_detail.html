@@ -1,6 +1,14 @@
 {% extends 'core/base.html' %}
 
-{% block title %}{{ manga.title }} — MangaVault{% endblock %}
+{% block title %}{{ manga.title }} | {{ manga.source|title }} | MangaVault{% endblock %}
+{% block meta_description %}{% if manga.description %}{{ manga.description|striptags|truncatechars:155 }}{% else %}Explore chapters of {{ manga.title }} from {{ manga.source|title }} in your MangaVault library.{% endif %}{% endblock %}
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb"><ol>
+    <li><a href="{% url 'index' %}">Home</a></li>
+    <li><a href="{% url 'search' %}">Discover</a></li>
+    <li aria-current="page">{{ manga.title }}</li>
+</ol></nav>
+{% endblock %}
 
 {% block extra_css %}
 <style>
@@ -114,7 +122,7 @@
 {% block content %}
 <div class="detail-header">
     <div class="detail-cover">
-        <img id="cover-img" src="{{ manga.cover_url }}" alt="{{ manga.title }}"
+        <img id="cover-img" src="/api/proxy-image/?url={{ manga.cover_url|urlencode }}&amp;source={{ manga.source|urlencode }}" alt="{{ manga.title }}"
              onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>'">
     </div>
     <div class="detail-info">
@@ -174,20 +182,29 @@ var selectedIds = new Set();
 fetch('/api/manga/' + mangaId + '/')
     .then(function(r) { return r.json(); })
     .then(function(data) {
+        document.querySelector('.detail-info h1').textContent = data.title || 'Untitled';
+        document.getElementById('cover-img').src = data.cover || '';
+        document.getElementById('cover-img').alt = data.title || 'Manga cover';
         var meta = document.getElementById('manga-meta');
-        meta.innerHTML =
-            '<span class="badge badge-accent">' + (data.content_type || 'manga').toUpperCase() + '</span>' +
-            '<span class="badge badge-blue">' + (data.source || '').toUpperCase() + '</span>' +
-            '<span class="badge ' + (data.status === 'completed' ? 'badge-success' : 'badge-warning') + '">' + (data.status || 'unknown') + '</span>';
+        meta.replaceChildren();
+        function addBadge(label, style) {
+            var badge = document.createElement('span');
+            badge.className = 'badge ' + style;
+            badge.textContent = label;
+            meta.appendChild(badge);
+        }
+        addBadge((data.content_type || 'manga').toUpperCase(), 'badge-accent');
+        addBadge((data.source || '').toUpperCase(), 'badge-blue');
+        addBadge(data.status || 'unknown', data.status === 'completed' ? 'badge-success' : 'badge-warning');
         if (data.author && data.author !== 'Unknown') {
-            meta.innerHTML += '<span class="badge badge-muted">' + data.author + '</span>';
+            addBadge(data.author, 'badge-muted');
         }
     }).catch(function(){});
 
 /* ---- Load chapters ---- */
 function loadChapters() {
     var container = document.getElementById('chapters-container');
-    container.innerHTML = '';
+    container.replaceChildren();
     allChapters = [];
 
     fetch('/api/manga/' + mangaId + '/chapters/')
@@ -197,21 +214,36 @@ function loadChapters() {
             var volumes = data.volumes || [];
 
             if (!volumes.length) {
-                container.innerHTML = '<div class="empty-state"><p>No chapters found.</p></div>';
+                var empty = document.createElement('div');
+                empty.className = 'empty-state';
+                empty.textContent = 'No chapters found.';
+                container.replaceChildren(empty);
                 return;
             }
 
             var totalChapters = 0;
             volumes.forEach(function(vol) { totalChapters += vol.chapters.length; });
-            document.getElementById('dl-stats').innerHTML =
-                '<i data-lucide="package" style="width:14px;height:14px"></i> ' +
-                totalChapters + ' chapters available';
+            var stats = document.getElementById('dl-stats');
+            var statsIcon = document.createElement('i');
+            statsIcon.setAttribute('data-lucide', 'package');
+            statsIcon.style.cssText = 'width:14px;height:14px';
+            stats.replaceChildren(statsIcon, document.createTextNode(totalChapters + ' chapters available'));
 
             volumes.forEach(function(vol) {
                 var group = document.createElement('div');
                 group.className = 'chapter-group';
-                var volLabel = vol.volume_number ? ('Volume ' + vol.volume_number) : 'Chapters';
-                group.innerHTML = '<div class="chapter-group-header"><h3><i data-lucide="folder"></i> ' + volLabel + ' <span class="badge badge-muted">' + vol.chapters.length + ' ch.</span></h3></div>';
+                var groupHeader = document.createElement('div');
+                groupHeader.className = 'chapter-group-header';
+                var groupTitle = document.createElement('h3');
+                var folderIcon = document.createElement('i');
+                folderIcon.setAttribute('data-lucide', 'folder');
+                groupTitle.append(folderIcon, document.createTextNode(vol.volume ? 'Volume ' + vol.volume : 'Chapters'));
+                var countBadge = document.createElement('span');
+                countBadge.className = 'badge badge-muted';
+                countBadge.textContent = vol.chapters.length + ' ch.';
+                groupTitle.appendChild(countBadge);
+                groupHeader.appendChild(groupTitle);
+                group.appendChild(groupHeader);
 
                 vol.chapters.forEach(function(ch) {
                     allChapters.push({ id: ch.id, number: ch.number, title: ch.title });
@@ -220,20 +252,42 @@ function loadChapters() {
                     row.className = 'chapter-item';
                     row.setAttribute('data-chapter-id', ch.id);
 
-                    var titleText = (ch.title && ch.title !== 'Chapter ' + ch.number)
-                        ? ' <span style="color:var(--text-muted);font-size:.8rem">' + ch.title + '</span>' : '';
-
-                    var checkboxHtml = '<input type="checkbox" class="ch-checkbox' + (selectMode ? ' active' : '') + '" data-cid="' + ch.id + '" onchange="onCheckChange(this)">';
-
-                    var actionsHtml =
-                        '<a href="/reader/' + ch.id + '/" class="btn btn-ghost btn-sm"><i data-lucide="book-open"></i> Read</a>' +
-                        '<a href="/download/chapter/' + ch.id + '/" class="btn btn-ghost btn-sm" title="Download CBZ"><i data-lucide="download"></i></a>';
-
-                    row.innerHTML =
-                        '<div class="ch-left">' + checkboxHtml +
-                        '<i data-lucide="circle" style="color:var(--text-muted);width:14px;height:14px"></i>' +
-                        '<span>Ch. ' + ch.number + '</span>' + titleText +
-                        '</div><div class="ch-actions">' + actionsHtml + '</div>';
+                    var left = document.createElement('div');
+                    left.className = 'ch-left';
+                    var checkbox = document.createElement('input');
+                    checkbox.type = 'checkbox';
+                    checkbox.className = 'ch-checkbox' + (selectMode ? ' active' : '');
+                    checkbox.dataset.cid = ch.id;
+                    checkbox.addEventListener('change', function() { onCheckChange(this); });
+                    var chapterIcon = document.createElement('i');
+                    chapterIcon.setAttribute('data-lucide', 'circle');
+                    chapterIcon.style.cssText = 'color:var(--text-muted);width:14px;height:14px';
+                    var chapterLabel = document.createElement('span');
+                    chapterLabel.textContent = 'Ch. ' + ch.number;
+                    left.append(checkbox, chapterIcon, chapterLabel);
+                    if (ch.title && ch.title !== 'Chapter ' + ch.number) {
+                        var chapterTitle = document.createElement('span');
+                        chapterTitle.style.cssText = 'color:var(--text-muted);font-size:.8rem';
+                        chapterTitle.textContent = ch.title;
+                        left.appendChild(chapterTitle);
+                    }
+                    var actions = document.createElement('div');
+                    actions.className = 'ch-actions';
+                    var readLink = document.createElement('a');
+                    readLink.href = '/reader/' + ch.id + '/';
+                    readLink.className = 'btn btn-ghost btn-sm';
+                    var readIcon = document.createElement('i');
+                    readIcon.setAttribute('data-lucide', 'book-open');
+                    readLink.append(readIcon, document.createTextNode(' Read'));
+                    var downloadLink = document.createElement('a');
+                    downloadLink.href = '/download/chapter/' + ch.id + '/';
+                    downloadLink.className = 'btn btn-ghost btn-sm';
+                    downloadLink.title = 'Download CBZ';
+                    var downloadIcon = document.createElement('i');
+                    downloadIcon.setAttribute('data-lucide', 'download');
+                    downloadLink.appendChild(downloadIcon);
+                    actions.append(readLink, downloadLink);
+                    row.append(left, actions);
                     group.appendChild(row);
                 });
 
@@ -308,60 +362,83 @@ function downloadSelected() {
     document.getElementById('btn-dl-all').classList.remove('ready');
 
     var list = document.getElementById('modal-list');
-    list.innerHTML = '';
+    list.replaceChildren();
 
     // Create list items
     chapters.forEach(function(ch) {
         var item = document.createElement('div');
         item.className = 'dl-modal-item';
         item.id = 'modal-ch-' + ch.id;
-        item.innerHTML = '<span class="item-label">Ch. ' + ch.number + (ch.title ? ' — ' + ch.title : '') + '</span>' +
-                          '<span class="item-status" id="modal-status-' + ch.id + '"><i data-lucide="clock" style="width:12px;height:12px"></i> Waiting</span>';
+        var label = document.createElement('span');
+        label.className = 'item-label';
+        label.textContent = 'Ch. ' + ch.number + (ch.title ? ' - ' + ch.title : '');
+        var itemStatus = document.createElement('span');
+        itemStatus.className = 'item-status';
+        itemStatus.id = 'modal-status-' + ch.id;
+        itemStatus.textContent = 'Waiting';
+        item.append(label, itemStatus);
         list.appendChild(item);
     });
     lucide.createIcons({ nodes: [list] });
 
-    // Sequentially "extract" (validate) each chapter, then show download links
-    var completed = 0;
+    apiFetch('/api/download/chapters/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chapter_ids: ids })
+    })
+    .then(function(response) {
+        return response.json().then(function(data) {
+            if (!response.ok) throw new Error(data.error || 'Could not start downloads');
+            return data;
+        });
+    })
+    .then(function(data) {
+        document.getElementById('modal-title').textContent = 'Downloading chapters…';
+        pollDownloadTask(data.task_id, chapters.length);
+    })
+    .catch(function(error) {
+        document.getElementById('modal-title').textContent = 'Download could not start';
+        document.getElementById('modal-status').textContent = error.message;
+        showToast(error.message, 'error');
+    });
+}
 
-    function processNext(index) {
-        if (index >= chapters.length) {
-            // All done
-            document.getElementById('modal-title').textContent = 'Downloads ready!';
-            document.getElementById('modal-status').textContent = completed + ' / ' + chapters.length + ' ready';
-            document.getElementById('modal-progress-fill').style.width = '100%';
-            document.getElementById('modal-progress-fill').style.background = 'var(--success)';
-            document.getElementById('btn-dl-all').classList.add('ready');
-            lucide.createIcons({ nodes: [document.querySelector('.dl-modal')] });
-            return;
-        }
+function pollDownloadTask(taskId, total) {
+    fetch('/api/task/' + taskId + '/')
+        .then(function(response) {
+            if (!response.ok) throw new Error('Could not check download progress');
+            return response.json();
+        })
+        .then(function(task) {
+            document.getElementById('modal-progress-fill').style.width = task.progress + '%';
+            document.getElementById('modal-status').textContent = task.message || (task.progress + '%');
+            if (task.status === 'pending' || task.status === 'downloading' || task.status === 'packaging') {
+                window.setTimeout(function() { pollDownloadTask(taskId, total); }, 1500);
+                return;
+            }
 
-        var ch = chapters[index];
-        var statusEl = document.getElementById('modal-status-' + ch.id);
-        statusEl.innerHTML = '<div class="spinner" style="width:12px;height:12px;border-width:2px"></div> Preparing…';
-
-        var pct = Math.round(((index) / chapters.length) * 100);
-        document.getElementById('modal-progress-fill').style.width = pct + '%';
-        document.getElementById('modal-status').textContent = (index + 1) + ' / ' + chapters.length;
-
-        // Quick HEAD request to verify the endpoint is reachable (fast validation)
-        fetch('/api/manga/' + mangaId + '/chapters/')
-            .then(function() {
-                // Mark as ready with download link
-                completed++;
-                var itemEl = document.getElementById('modal-ch-' + ch.id);
-                var statusSpan = document.getElementById('modal-status-' + ch.id);
-                statusSpan.outerHTML = '<a class="dl-link" href="/download/chapter/' + ch.id + '/" download>Download</a>';
-
-                setTimeout(function() { processNext(index + 1); }, 200);
-            })
-            .catch(function() {
-                statusEl.innerHTML = '<span style="color:var(--accent)">Failed</span>';
-                setTimeout(function() { processNext(index + 1); }, 200);
+            var files = task.downloaded_files || [];
+            files.forEach(function(file) {
+                var statusEl = document.getElementById('modal-status-' + file.chapter_id);
+                if (!statusEl) return;
+                var link = document.createElement('a');
+                link.className = 'dl-link';
+                link.href = file.url;
+                link.textContent = 'Download';
+                statusEl.replaceWith(link);
             });
-    }
 
-    processNext(0);
+            document.getElementById('modal-title').textContent =
+                task.status === 'failed' ? 'Download failed' : 'Downloads ready';
+            document.getElementById('modal-progress-fill').style.width = '100%';
+            document.getElementById('btn-dl-all').classList.toggle('ready', files.length > 0);
+            if (files.length < total) showToast(task.message || 'Some chapters could not be downloaded', 'warning');
+            lucide.createIcons({ nodes: [document.querySelector('.dl-modal')] });
+        })
+        .catch(function(error) {
+            document.getElementById('modal-title').textContent = 'Progress check failed';
+            document.getElementById('modal-status').textContent = error.message;
+        });
 }
 
 /* ---- Download all ready links from modal ---- */
@@ -385,7 +462,7 @@ function downloadAllReady() {
 /* ---- Refresh chapters from source ---- */
 function refreshManga() {
     showToast('Refreshing chapters...', 'info');
-    fetch('/api/import/', {
+    apiFetch('/api/import/', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ source: mangaSource, source_id: mangaSourceId, refresh: true })
@@ -402,7 +479,7 @@ function refreshManga() {
 /* ---- Delete manga ---- */
 function deleteManga() {
     if (!confirm('Delete this manga and all its data?')) return;
-    fetch('/api/manga/' + mangaId + '/delete/', { method: 'DELETE' })
+    apiFetch('/api/manga/' + mangaId + '/delete/', { method: 'DELETE' })
         .then(function(r) { return r.json(); })
         .then(function() {
             showToast('Manga deleted', 'success');

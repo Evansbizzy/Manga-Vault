@@ -1,5 +1,6 @@
 import os
 from pathlib import Path
+from django.core.exceptions import ImproperlyConfigured
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -15,11 +16,14 @@ def _env_list(name, default):
 
 
 DEBUG = _env_bool('DJANGO_DEBUG', True)
-SECRET_KEY = os.getenv(
-    'DJANGO_SECRET_KEY',
-    'local-development-secret-key-change-this-before-deploying-please',
-)
+DEVELOPMENT_SECRET_KEY = 'local-development-secret-key-change-this-before-deploying-please'
+SECRET_KEY = os.getenv('DJANGO_SECRET_KEY', DEVELOPMENT_SECRET_KEY)
+if not DEBUG and SECRET_KEY in {'', DEVELOPMENT_SECRET_KEY, 'replace-this-with-a-long-random-secret'}:
+    raise ImproperlyConfigured('Set a unique DJANGO_SECRET_KEY before running with DJANGO_DEBUG=false.')
 ALLOWED_HOSTS = _env_list('DJANGO_ALLOWED_HOSTS', ['127.0.0.1', 'localhost'])
+if not DEBUG and '*' in ALLOWED_HOSTS:
+    raise ImproperlyConfigured('Wildcard DJANGO_ALLOWED_HOSTS is not allowed in production.')
+SITE_URL = os.getenv('DJANGO_SITE_URL', '').rstrip('/')
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -41,6 +45,7 @@ MIDDLEWARE = [
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
+    'manga_downloader.middleware.ProductionLoginRequiredMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
@@ -58,6 +63,7 @@ TEMPLATES = [
                 'django.template.context_processors.request',
                 'django.contrib.auth.context_processors.auth',
                 'django.contrib.messages.context_processors.messages',
+                'manga_downloader.context_processors.site_url',
             ],
         },
     },
@@ -92,8 +98,23 @@ REST_FRAMEWORK = {
         'rest_framework.permissions.AllowAny',
     ],
     'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework.authentication.SessionAuthentication',
         'rest_framework.authentication.BasicAuthentication',
     ],
+    'DEFAULT_THROTTLE_CLASSES': [
+        'rest_framework.throttling.AnonRateThrottle',
+        'rest_framework.throttling.UserRateThrottle',
+        'rest_framework.throttling.ScopedRateThrottle',
+    ],
+    'DEFAULT_THROTTLE_RATES': {
+        'anon': '36000/hour',
+        'user': '36000/hour',
+        'search': '20/minute',
+        'import': '20/hour',
+        'download': '60/hour',
+        'proxy_image': '20000/hour',
+        'progress': '120/minute',
+    },
     'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
     'PAGE_SIZE': 20
 }
@@ -111,6 +132,16 @@ if not DEBUG:
     SECURE_HSTS_SECONDS = 31536000
     SECURE_HSTS_INCLUDE_SUBDOMAINS = True
     SECURE_HSTS_PRELOAD = True
+    SESSION_COOKIE_HTTPONLY = True
+    SESSION_COOKIE_SAMESITE = 'Lax'
+    CSRF_COOKIE_SAMESITE = 'Lax'
+    SECURE_CONTENT_TYPE_NOSNIFF = True
+    X_FRAME_OPTIONS = 'DENY'
+    SECURE_REFERRER_POLICY = 'same-origin'
+
+LOGIN_URL = '/accounts/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/accounts/login/'
 
 # Celery (for background downloads)
 CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', 'redis://localhost:6379/0')

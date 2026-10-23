@@ -1,6 +1,9 @@
 import logging
+import hashlib
 from pathlib import Path
 
+from django.core.cache import cache
+from django.contrib.auth.views import LoginView
 from django.http import FileResponse, HttpResponse
 from django.views.generic import TemplateView, DetailView
 from django.views import View
@@ -10,6 +13,45 @@ from .scrapers import get_scraper
 from .utils.downloads import download_chapter, download_volume
 
 logger = logging.getLogger(__name__)
+
+
+class RateLimitedLoginView(LoginView):
+    def dispatch(self, request, *args, **kwargs):
+        remote_address = request.META.get('REMOTE_ADDR', 'unknown')
+        digest = hashlib.sha256(remote_address.encode()).hexdigest()
+        self.attempt_key = f'login-attempts:{digest}'
+        if cache.get(self.attempt_key, 0) >= 10:
+            return HttpResponse('Too many sign-in attempts. Try again later.', status=429)
+        return super().dispatch(request, *args, **kwargs)
+
+    def form_invalid(self, form):
+        cache.add(self.attempt_key, 0, timeout=900)
+        try:
+            cache.incr(self.attempt_key)
+        except ValueError:
+            cache.set(self.attempt_key, 1, timeout=900)
+        return super().form_invalid(form)
+
+    def form_valid(self, form):
+        cache.delete(self.attempt_key)
+        return super().form_valid(form)
+
+
+def robots_txt(request):
+    return HttpResponse(
+        'User-agent: *\n'
+        'Allow: /\n'
+        'Disallow: /admin/\n'
+        'Disallow: /api/\n'
+        'Disallow: /library/\n'
+        'Disallow: /reader/\n'
+        'Disallow: /download/\n',
+        content_type='text/plain; charset=utf-8',
+    )
+
+
+def page_not_found(request, exception):
+    return render(request, '404.html', status=404)
 
 
 class IndexView(TemplateView):

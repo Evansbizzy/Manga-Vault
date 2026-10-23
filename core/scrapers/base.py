@@ -5,6 +5,8 @@ from typing import List, Dict, Optional
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
+from core.utils.network import safe_get
+
 
 @dataclass
 class ChapterData:
@@ -33,6 +35,9 @@ class MangaData:
 class BaseScraper(ABC):
     name: str = "base"
     base_url: str = ""
+    image_content_types = {
+        'image/avif', 'image/bmp', 'image/gif', 'image/jpeg', 'image/png', 'image/webp',
+    }
 
     def __init__(self):
         self.session = requests.Session()
@@ -62,7 +67,7 @@ class BaseScraper(ABC):
         for attempt in range(self.max_retries):
             self._rate_limit()
             try:
-                resp = self.session.get(url, **kwargs)
+                resp = safe_get(self.session, url, **kwargs)
                 resp.raise_for_status()
                 return resp
             except requests.exceptions.HTTPError as e:
@@ -101,6 +106,11 @@ class BaseScraper(ABC):
         parsed = urlparse(url)
         return f"{parsed.scheme}://{parsed.netloc}/"
 
+    def image_referer(self, image_url: str = "") -> str:
+        """Return the site origin that should be sent when fetching images."""
+        parsed = urlparse(self.base_url)
+        return f"{parsed.scheme}://{parsed.netloc}/" if parsed.netloc else self._referer_for_url(image_url)
+
     def download_chapter_images(self, chapter_url: str) -> List[bytes]:
         """
         Download ALL pages of a chapter at once.
@@ -120,18 +130,24 @@ class BaseScraper(ABC):
                 try:
                     session = requests.Session()
                     headers = self.get_headers()
-                    headers["Referer"] = self._referer_for_url(url)
+                    headers["Referer"] = self.image_referer(url)
                     headers["Accept"] = "image/avif,image/webp,image/png,image/jpeg,*/*"
                     session.headers.update(headers)
-                    resp = session.get(url, timeout=30)
-                    resp.raise_for_status()
-                    content_type = resp.headers.get("content-type", "")
-                    if resp.content and (
-                        "image" in content_type
-                        or len(resp.content) > 1024
-                    ):
-                        return idx, resp.content
-                    return idx, None
+                    resp = safe_get(session, url, timeout=30, stream=True)
+                    with resp:
+                        resp.raise_for_status()
+                        content_type = resp.headers.get('content-type', '').split(';', 1)[0].lower()
+                        if content_type not in self.image_content_types:
+                            return idx, None
+                        content_length = resp.headers.get('content-length')
+                        if content_length and int(content_length) > 20 * 1024 * 1024:
+                            return idx, None
+                        image_data = bytearray()
+                        for chunk in resp.iter_content(chunk_size=64 * 1024):
+                            image_data.extend(chunk)
+                            if len(image_data) > 20 * 1024 * 1024:
+                                return idx, None
+                        return idx, bytes(image_data) if image_data else None
                 except Exception as e:
                     if attempt < self.max_retries - 1:
                         time.sleep(1 * (attempt + 1))

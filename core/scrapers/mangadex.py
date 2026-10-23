@@ -20,6 +20,9 @@ class MangaDexScraper(BaseScraper):
             "User-Agent": "MangaDownloader/1.0",
             "Content-Type": "application/json"
         }
+
+    def image_referer(self, image_url: str = "") -> str:
+        return "https://mangadex.org/"
     
     def search(self, query: str) -> List[MangaData]:
         url = f"{self.base_url}/manga"

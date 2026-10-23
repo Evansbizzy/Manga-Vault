@@ -1,91 +1,136 @@
 {% extends 'core/base.html' %}
 
-{% block title %}MangaVault — Manga &amp; Manhwa Downloader{% endblock %}
+{% block title %}MangaVault - Your manga, one shelf{% endblock %}
+{% block meta_description %}Search supported manga sources, read chapters online, and organize manga and manhwa in your personal library.{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li aria-current="page">Home</li></ol></nav>{% endblock %}
 
 {% block extra_css %}
 <style>
-.hero {
-    text-align: center; padding: 4rem 1rem;
-    background: linear-gradient(135deg, rgba(248,81,73,.08), rgba(88,166,255,.06));
-    border-radius: var(--radius); margin-bottom: 2rem;
+.home { max-width: 1180px; margin: 0 auto; }
+.home-hero {
+    position: relative; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(300px, .95fr);
+    align-items: center; gap: 2rem; min-height: 390px; overflow: hidden;
+    padding: clamp(2rem, 6vw, 4.5rem); margin: .5rem 0 3rem;
+    border: 1px solid var(--border); border-radius: 24px;
+    background: radial-gradient(ellipse at 88% 52%, rgba(248,81,73,.14), transparent 42%),
+                linear-gradient(120deg, #111822 8%, #10141c 72%);
 }
-.hero h1 {
-    font-size: 2.2rem; font-weight: 800;
-    background: linear-gradient(90deg, var(--accent), var(--accent-secondary));
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+.hero-copy { position: relative; z-index: 1; }
+.eyebrow { display: inline-flex; align-items: center; gap: .55rem; color: var(--accent); font-size: .73rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
+.eyebrow i { width: 15px; height: 15px; }
+.hero-copy h1 { max-width: 600px; margin: 1rem 0; font-size: clamp(2.6rem, 6vw, 4.7rem); line-height: .99; letter-spacing: -.065em; font-weight: 850; color: #f0f3f6; }
+.hero-copy h1 span { color: var(--accent); }
+.hero-copy p { max-width: 430px; color: var(--text-secondary); font-size: 1.02rem; line-height: 1.7; }
+.hero-actions { display: flex; flex-wrap: wrap; gap: .7rem; margin-top: 1.7rem; }
+.hero-actions .btn { display: inline-flex; align-items: center; gap: .5rem; padding: .75rem 1rem; }
+.hero-actions i { width: 17px; height: 17px; }
+.hero-art { position: relative; height: 300px; display: flex; align-items: center; justify-content: center; }
+.cover-stack { position: relative; width: min(100%, 420px); height: 285px; }
+.stack-cover { position: absolute; top: 12px; left: 50%; width: 174px; height: 252px; object-fit: cover; border: 1px solid rgba(255,255,255,.19); border-radius: 9px; box-shadow: 0 24px 55px rgba(0,0,0,.42); transition: transform .3s ease; }
+.stack-cover:nth-child(1) { transform: translateX(-105%) rotate(-12deg) translateY(8px); }
+.stack-cover:nth-child(2) { transform: translateX(-50%) rotate(2deg) translateY(-6px); z-index: 1; }
+.stack-cover:nth-child(3) { transform: translateX(5%) rotate(12deg) translateY(12px); }
+.home-hero:hover .stack-cover:nth-child(1) { transform: translateX(-115%) rotate(-16deg) translateY(4px); }
+.home-hero:hover .stack-cover:nth-child(3) { transform: translateX(15%) rotate(16deg) translateY(4px); }
+.stack-empty { display: grid; place-items: center; width: 210px; height: 260px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; color: var(--accent); background: linear-gradient(145deg, #202b37, #151b24); box-shadow: 0 24px 55px rgba(0,0,0,.35); }
+.stack-empty i { width: 70px; height: 70px; opacity: .8; }
+.home-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-bottom: 3.2rem; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--border); }
+.home-link { display: flex; gap: 1rem; align-items: flex-start; padding: 1.25rem; background: var(--bg-card); color: inherit; text-decoration: none; transition: background .18s ease; }
+.home-link:hover { background: var(--bg-secondary); }
+.home-link-icon { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: var(--accent); background: rgba(248,81,73,.1); }
+.home-link-icon i { width: 19px; height: 19px; }
+.home-link strong { display: block; margin: .1rem 0 .3rem; font-size: .94rem; }
+.home-link p { margin: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.5; }
+.section-heading { display: flex; justify-content: space-between; align-items: center; gap: 1rem; margin-bottom: 1rem; }
+.section-heading h2 { display: flex; align-items: center; gap: .55rem; margin: 0; font-size: 1.13rem; font-weight: 750; }
+.section-heading h2 i { width: 19px; height: 19px; color: var(--accent); }
+.section-heading a { display: inline-flex; align-items: center; gap: .4rem; color: var(--text-secondary); font-size: .84rem; text-decoration: none; }
+.section-heading a:hover { color: var(--accent); }
+.section-heading a i { width: 15px; height: 15px; }
+.home .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 1rem; }
+.home .card { overflow: hidden; border-radius: 12px; transition: transform .2s ease, border-color .2s ease; }
+.home .card:hover { transform: translateY(-4px); border-color: rgba(248,81,73,.65); }
+.home .card img { aspect-ratio: 2 / 2.8; }
+.home .card-body { padding: .85rem; }
+.home .card-body h3 { font-size: .88rem; }
+.home .empty-state { padding: 2.3rem 1rem; border: 1px dashed var(--border); border-radius: 14px; }
+@media (max-width: 760px) {
+    .home-hero { grid-template-columns: 1fr; gap: .5rem; padding: 2rem 1.5rem 1.3rem; }
+    .hero-copy h1 { max-width: 500px; font-size: clamp(2.7rem, 11vw, 4.2rem); }
+    .hero-art { height: 230px; }
+    .cover-stack { height: 220px; }
+    .stack-cover { width: 137px; height: 202px; }
+    .home-links { grid-template-columns: 1fr; }
+    .home-link { padding: 1rem; }
+    .home .grid { grid-template-columns: repeat(auto-fill, minmax(135px, 1fr)); }
 }
-.hero p { color: var(--text-secondary); margin-top: .6rem; max-width: 500px; margin-inline: auto; }
-.hero .cta { margin-top: 1.5rem; }
-.features { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; margin-bottom: 2.5rem; }
-.feature-card {
-    background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius);
-    padding: 1.5rem; text-align: center; transition: border-color .2s;
+@media (prefers-reduced-motion: reduce) {
+    .stack-cover, .home-link, .home .card { transition: none; }
 }
-.feature-card:hover { border-color: var(--accent); }
-.feature-card .icon-wrap { margin-bottom: .75rem; }
-.feature-card .icon-wrap i { width: 32px; height: 32px; color: var(--accent-secondary); }
-.feature-card h3 { font-size: .95rem; font-weight: 700; margin-bottom: .3rem; }
-.feature-card p { font-size: .8rem; color: var(--text-muted); }
-.section-title {
-    font-size: 1.1rem; font-weight: 700; margin-bottom: 1rem;
-    display: flex; align-items: center; gap: .5rem;
-}
-.section-title::after { content: ''; flex: 1; height: 1px; background: var(--border); }
-.section-title i { width: 20px; height: 20px; color: var(--accent); }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="hero">
-    <h1>Manga & Manhwa Downloader</h1>
-    <p>Search, read online, and download entire chapters and volumes as CBZ archives.</p>
-    <div class="cta">
-        <a href="/search/" class="btn btn-primary"><i data-lucide="search"></i> Start Searching</a>
-    </div>
-</div>
-
-<div class="features">
-    <div class="feature-card">
-        <div class="icon-wrap"><i data-lucide="scan-search"></i></div>
-        <h3>Multi-Source Search</h3>
-        <p>Search MangaDex, MangaPill, Comick, and more from one unified interface.</p>
-    </div>
-    <div class="feature-card">
-        <div class="icon-wrap"><i data-lucide="book-open-check"></i></div>
-        <h3>Read Online</h3>
-        <p>Read chapters directly in your browser with a smooth reader experience.</p>
-    </div>
-    <div class="feature-card">
-        <div class="icon-wrap"><i data-lucide="archive"></i></div>
-        <h3>CBZ Downloads</h3>
-        <p>Download chapters and volumes packaged as CBZ comic archives.</p>
-    </div>
-    <div class="feature-card">
-        <div class="icon-wrap"><i data-lucide="link"></i></div>
-        <h3>URL Import</h3>
-        <p>Paste any manga URL — auto-detects the site and imports it.</p>
-    </div>
-</div>
-
-<h2 class="section-title"><i data-lucide="clock"></i> Recently Added</h2>
-
-{% if manga_list %}
-<div class="grid">
-    {% for manga in manga_list %}
-    <a href="/manga/{{ manga.id }}/" class="card">
-        <img src="{{ manga.cover_url }}" alt="{{ manga.title }}" loading="lazy"
-             onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>'">
-        <div class="card-body">
-            <h3>{{ manga.title }}</h3>
-            <div class="meta">{{ manga.source }} &middot; {{ manga.total_chapters_count }} chapters</div>
+<main class="home">
+    <section class="home-hero" aria-labelledby="home-title">
+        <div class="hero-copy">
+            <span class="eyebrow"><i data-lucide="library-big"></i> Your personal manga vault</span>
+            <h1 id="home-title">Find your next <span>world.</span></h1>
+            <p>Search across manga sources, keep every series on one shelf, and take chapters with you as CBZ files.</p>
+            <div class="hero-actions">
+                <a href="/search/" class="btn btn-primary"><i data-lucide="search"></i> Discover manga</a>
+                <a href="/library/" class="btn btn-ghost"><i data-lucide="library"></i> Open my library</a>
+            </div>
         </div>
-    </a>
-    {% endfor %}
-</div>
-{% else %}
-<div class="empty-state">
-    <div class="icon-wrap"><i data-lucide="book-marked"></i></div>
-    <p>Your library is empty. <a href="/search/">Search for manga</a> to get started.</p>
-</div>
-{% endif %}
+        <div class="hero-art" aria-hidden="true">
+            {% if manga_list %}
+            <div class="cover-stack">
+                {% for manga in manga_list|slice:":3" %}
+                {% if manga.cover_url %}<img class="stack-cover" src="/api/proxy-image/?url={{ manga.cover_url|urlencode }}&amp;source={{ manga.source|urlencode }}" alt="" loading="lazy">{% endif %}
+                {% endfor %}
+            </div>
+            {% else %}
+            <div class="stack-empty"><i data-lucide="book-open-check"></i></div>
+            {% endif %}
+        </div>
+    </section>
+
+    <nav class="home-links" aria-label="Quick actions">
+        <a class="home-link" href="/search/">
+            <span class="home-link-icon"><i data-lucide="scan-search"></i></span>
+            <span><strong>Search everywhere</strong><p>Look across available sources in one go.</p></span>
+        </a>
+        <a class="home-link" href="/library/">
+            <span class="home-link-icon"><i data-lucide="book-marked"></i></span>
+            <span><strong>Your reading shelf</strong><p>Return to series you have already imported.</p></span>
+        </a>
+        <a class="home-link" href="/search/">
+            <span class="home-link-icon"><i data-lucide="archive"></i></span>
+            <span><strong>Offline-ready chapters</strong><p>Package chapters and volumes into CBZ archives.</p></span>
+        </a>
+    </nav>
+
+    <section aria-labelledby="recent-title">
+        <div class="section-heading">
+            <h2 id="recent-title"><i data-lucide="clock-3"></i> Recently added</h2>
+            <a href="/library/">View library <i data-lucide="arrow-right"></i></a>
+        </div>
+        {% if manga_list %}
+        <div class="grid">
+            {% for manga in manga_list %}
+            <a href="/manga/{{ manga.id }}/" class="card">
+                <img src="/api/proxy-image/?url={{ manga.cover_url|urlencode }}&amp;source={{ manga.source|urlencode }}" alt="{{ manga.title }}" loading="lazy"
+                     onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>'">
+                <div class="card-body"><h3>{{ manga.title }}</h3><div class="meta">{{ manga.source }} &middot; {{ manga.total_chapters_count }} chapters</div></div>
+            </a>
+            {% endfor %}
+        </div>
+        {% else %}
+        <div class="empty-state">
+            <div class="icon-wrap"><i data-lucide="book-marked"></i></div>
+            <p>Your shelf is ready when you are. <a href="/search/">Find a manga to add</a>.</p>
+        </div>
+        {% endif %}
+    </section>
+</main>
 {% endblock %}

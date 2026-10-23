@@ -24,6 +24,7 @@ def _download_chapters(task_id: int):
         )
         total = len(chapters)
         success_count = 0
+        failures = []
 
         for idx, chapter in enumerate(chapters):
             slice_start = int((idx / max(total, 1)) * 90)
@@ -43,15 +44,21 @@ def _download_chapters(task_id: int):
                     task.save()
                 else:
                     logger.warning("No pages for chapter %s", chapter.chapter_number)
+                    failures.append(chapter.chapter_number)
             except Exception as exc:
                 logger.warning("Failed to prepare ch %s: %s", chapter.chapter_number, exc)
+                failures.append(chapter.chapter_number)
 
             task.progress = slice_end
             task.save()
 
-        task.status = 'completed'
+        task.status = 'failed' if not success_count else 'completed'
         task.progress = 100
         task.message = f"{success_count}/{total} chapters ready for download"
+        if failures:
+            task.message += f"; failed chapters: {', '.join(failures[:20])}"
+            if len(failures) > 20:
+                task.message += f" and {len(failures) - 20} more"
         task.completed_at = timezone.now()
         task.save()
 
@@ -59,7 +66,8 @@ def _download_chapters(task_id: int):
         logger.error("Task %s failed: %s", task_id, traceback.format_exc())
         task.status = 'failed'
         task.message = str(e)
-        task.save()
+        task.completed_at = timezone.now()
+        task.save(update_fields=['status', 'message', 'completed_at'])
 
 
 def _download_volume(task_id: int, volume_id: int):
@@ -76,16 +84,14 @@ def _download_volume(task_id: int, volume_id: int):
         )
         total = len(chapters)
 
-        for idx, chapter in enumerate(chapters):
-            task.progress = int((idx / max(total, 1)) * 90)
-            task.message = f"Preparing Ch. {chapter.chapter_number}…"
-            task.save()
-
+        task.progress = 5
+        task.message = f"Preparing volume {volume.volume_number} ({total} chapters)"
+        task.save(update_fields=['progress', 'message'])
         download_volume(volume)
 
         task.status = 'completed'
         task.progress = 100
-        task.message = f"Volume {volume.volume_number} ready"
+        task.message = f"Volume {volume.volume_number} ready ({total} chapters)"
         task.completed_at = timezone.now()
         task.save()
 
@@ -93,7 +99,8 @@ def _download_volume(task_id: int, volume_id: int):
         logger.error("Volume task %s failed: %s", task_id, traceback.format_exc())
         task.status = 'failed'
         task.message = str(e)
-        task.save()
+        task.completed_at = timezone.now()
+        task.save(update_fields=['status', 'message', 'completed_at'])
 
 
 # ---------------------------------------------------------------------------

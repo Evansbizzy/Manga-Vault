@@ -11,6 +11,7 @@ urlpatterns = [
     path('chapter/<int:chapter_id>/download/', views.DownloadChapterView.as_view()),
     path('chapter/<int:chapter_id>/file/', views.ChapterFileView.as_view()),
     path('chapter/<int:chapter_id>/pages/', views.ChapterPagesView.as_view()),
+    path('chapter/<int:chapter_id>/progress/', views.ChapterProgressView.as_view()),
     path('download/chapters/', views.DownloadChaptersView.as_view()),
     path('download/volume/<int:volume_id>/', views.DownloadVolumeView.as_view()),
     path('volume/<int:volume_id>/file/', views.VolumeFileView.as_view()),

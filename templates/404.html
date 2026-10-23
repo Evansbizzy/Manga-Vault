@@ -1,0 +1,17 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Page not found | MangaVault{% endblock %}
+{% block meta_description %}The page you requested could not be found in MangaVault.{% endblock %}
+{% block robots %}noindex,nofollow{% endblock %}
+{% block breadcrumbs %}
+<nav class="breadcrumbs" aria-label="Breadcrumb">
+    <ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Page not found</li></ol>
+</nav>
+{% endblock %}
+{% block content %}
+<main class="empty-state">
+    <h1>Page not found</h1>
+    <p>The page may have moved or the link may be incorrect.</p>
+    <p><a class="btn btn-primary" href="{% url 'index' %}">Return home</a></p>
+</main>
+{% endblock %}

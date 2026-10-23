@@ -2,6 +2,7 @@ import os
 import re
 
 from django.db import models
+from django.conf import settings
 
 
 def chapter_sort_key(value: str):
@@ -111,3 +112,20 @@ class DownloadTask(models.Model):
     
     def __str__(self):
         return f"Task {self.id} - {self.status}"
+
+
+class ReadingProgress(models.Model):
+    user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name='manga_reading_progress')
+    chapter = models.ForeignKey(Chapter, on_delete=models.CASCADE, related_name='reading_progress')
+    current_page = models.PositiveIntegerField(default=0)
+    completed = models.BooleanField(default=False)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(fields=['user', 'chapter'], name='unique_user_chapter_progress'),
+        ]
+        ordering = ['-updated_at']
+
+    def __str__(self):
+        return f"{self.user} - {self.chapter}"

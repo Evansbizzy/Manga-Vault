@@ -4,6 +4,7 @@ from . import views
 urlpatterns = [
     path('sources/', views.SourcesView.as_view()),
     path('search/', views.SearchView.as_view()),
+    path('search/stream/', views.SearchStreamView.as_view()),
     path('import/', views.ImportMangaView.as_view()),
     path('manga/<int:pk>/', views.MangaDetailView.as_view()),
     path('manga/<int:pk>/chapters/', views.ChapterListView.as_view()),

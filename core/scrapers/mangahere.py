@@ -25,7 +25,7 @@ class MangaHereScraper(BaseScraper):
         return host == "mangahere.cc" or host.endswith(".mangahere.cc") or host == "fanfox.net" or host.endswith(".fanfox.net")
 
     def search(self, query: str) -> List[MangaData]:
-        response = self.get(f"{self.base_url}/search?title={quote_plus(query)}", timeout=15)
+        response = self.get(f"{self.base_url}/search?title={quote_plus(query)}", timeout=(4, 10))
         soup = BeautifulSoup(response.text, "html.parser")
         results = []
         seen = set()

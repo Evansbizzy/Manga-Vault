@@ -33,7 +33,7 @@ class MangaDexScraper(BaseScraper):
             "availableTranslatedLanguage[]": ["en", "fr"],
         }
         
-        resp = self.get(url, params=params, timeout=30)
+        resp = self.get(url, params=params, timeout=(4, 12))
         resp.raise_for_status()
         data = resp.json()
         
@@ -124,8 +124,8 @@ class MangaDexScraper(BaseScraper):
         hash_val = chapter["hash"]
         
         # Build all image URLs
-        return [f"{base}/data/{hash_val}/{filename}" 
-                for filename in chapter["data"]]
+        filenames = chapter.get("data") or chapter.get("dataSaver") or []
+        return [f"{base}/data/{hash_val}/{filename}" for filename in filenames]
     
     def _parse_manga_basic(self, data: dict) -> MangaData:
         attr = data["attributes"]

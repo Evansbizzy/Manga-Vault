@@ -1,20 +1,29 @@
 import logging
+import json
 import re
 import requests
+import time
 from urllib.parse import quote, unquote, urlparse
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
+from rest_framework.permissions import IsAuthenticated
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.shortcuts import get_object_or_404
-from django.http import FileResponse, Http404, HttpResponse
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.views import View
 from django.conf import settings
 from django.core.cache import cache
 from django.db.models import Count, Q
+from django.utils import timezone
 from pathlib import Path
 from core.models import Manga, Chapter, Volume, DownloadTask, ReadingProgress
 from core.scrapers import get_scraper, list_scrapers, search_all
+from core.scrapers.registry import search_source_cached, search_all_progressively
+from core.scrapers.registry import filter_search_results
+from core.utils.chapter_pages import ChapterPageExtractionError, get_chapter_page_urls
+from core.utils.downloads import is_current_chapter_archive
 from core.tasks import (
     download_chapters_task,
     download_volume_task,
@@ -27,6 +36,18 @@ from core.utils.network import safe_get, validate_public_http_url
 logger = logging.getLogger(__name__)
 
 ALLOWED_LANGUAGES = {"en", "fr"}
+
+
+class OwnedAPIView(APIView):
+    permission_classes = [IsAuthenticated]
+
+
+def _owned_manga(request, pk):
+    return get_object_or_404(Manga, pk=pk, owner=request.user)
+
+
+def _owned_chapter(request, chapter_id):
+    return get_object_or_404(Chapter, pk=chapter_id, manga__owner=request.user)
 
 
 def _image_proxy_url(image_url, source):
@@ -50,6 +71,14 @@ def _enqueue_or_run(task_callable, fallback_callable, task_id, *extra_args):
         task_callable.delay(task_id, *extra_args)
         return {"task_id": task_id, "queued": True}
     except Exception as exc:
+        if not settings.ALLOW_LOCAL_TASK_FALLBACK:
+            DownloadTask.objects.filter(pk=task_id).update(
+                status='failed',
+                message='Background worker is unavailable. Please try again later.',
+                completed_at=timezone.now(),
+            )
+            logger.error("Celery unavailable and local fallback is disabled for task %s: %s", task_id, exc)
+            return {"task_id": task_id, "queued": False, "unavailable": True}
         logger.warning("Celery unavailable; starting task %s locally: %s", task_id, exc)
         fallback_callable(task_id, *extra_args)
         return {"task_id": task_id, "queued": False}
@@ -136,6 +165,8 @@ class SearchView(APIView):
         source = request.GET.get('source', 'all')
         if not query:
             return Response({'error': 'Query required'}, status=400)
+        if len(re.sub(r"\W+", "", query)) < 2:
+            return Response({'error': 'Enter at least 2 characters for a useful search'}, status=400)
         if len(query) > 200:
             return Response({'error': 'Query must be 200 characters or fewer'}, status=400)
 
@@ -146,7 +177,7 @@ class SearchView(APIView):
                 scraper = get_scraper(source)
                 if not getattr(scraper, 'supports_search', False):
                     return Response({'error': f'{source} does not support search'}, status=400)
-                items = scraper.search(query)
+                items, was_cached = search_source_cached(type(scraper), query)
                 results = [{
                     'source': scraper.name,
                     'title': item.title,
@@ -156,13 +187,18 @@ class SearchView(APIView):
                     'source_id': item.source_id,
                     'content_type': item.content_type,
                     'chapters_count': len(item.chapters),
+                    'external_url': item.external_url,
+                    'supports_import': getattr(scraper, 'supports_url_import', False),
+                    'supports_read': getattr(scraper, 'supports_read', True),
                 } for item in items]
+                results = filter_search_results(results, query)
                 source_status = [{
                     'source': scraper.name,
                     'label': getattr(scraper, 'label', scraper.name.title()),
                     'status': 'ok',
                     'count': len(results),
                     'message': '',
+                    'cached': was_cached,
                 }]
         except Exception as exc:
             logger.error("Search failed: %s", exc)
@@ -178,7 +214,35 @@ class SearchView(APIView):
         })
 
 
-class ImportMangaView(APIView):
+class SearchStreamView(APIView):
+    """Stream each provider's results as soon as that provider finishes."""
+    throttle_scope = 'search'
+
+    def get(self, request):
+        query = request.GET.get('q', '').strip()
+        if not query:
+            return Response({'error': 'Query required'}, status=400)
+        if len(re.sub(r"\W+", "", query)) < 2:
+            return Response({'error': 'Enter at least 2 characters for a useful search'}, status=400)
+        if len(query) > 200:
+            return Response({'error': 'Query must be 200 characters or fewer'}, status=400)
+
+        def events():
+            for result in search_all_progressively(query):
+                result['results'] = [
+                    {**item, 'cover': _image_proxy_url(item.get('cover'), item.get('source'))}
+                    for item in result['results']
+                ]
+                yield json.dumps(result, ensure_ascii=False) + '\n'
+            yield json.dumps({'done': True}) + '\n'
+
+        response = StreamingHttpResponse(events(), content_type='application/x-ndjson; charset=utf-8')
+        response['Cache-Control'] = 'no-cache, no-transform'
+        response['X-Accel-Buffering'] = 'no'
+        return response
+
+
+class ImportMangaView(OwnedAPIView):
     throttle_scope = 'import'
 
     def post(self, request):
@@ -192,14 +256,40 @@ class ImportMangaView(APIView):
 
         try:
             scraper = get_scraper(source, source_id)
+            if not getattr(scraper, 'supports_url_import', False):
+                return Response({'error': f'{scraper.label} is a discovery-only source'}, status=400)
             data = scraper.get_manga_details(source_id)
         except Exception as exc:
             logger.error("Import failed for %s: %s", source_id, exc)
             return Response({'error': f'Failed to fetch manga: {exc}'}, status=500)
 
+        if not data.title or data.title.strip().casefold() in {'', 'untitled'}:
+            return Response({
+                'error': 'The source did not return a usable series title. Nothing was added.'
+            }, status=422)
+        if not data.source_id:
+            return Response({
+                'error': 'The source did not return a stable series identifier. Nothing was added.'
+            }, status=422)
+        usable_chapters = [
+            chapter for chapter in data.chapters
+            if chapter.number and str(chapter.number).strip()
+            and chapter.source_url and str(chapter.source_url).strip()
+            and chapter.language in ALLOWED_LANGUAGES
+        ]
+        if not usable_chapters:
+            return Response({
+                'error': 'This source returned no usable chapter links. Nothing was added. Try another source or a different series URL.'
+            }, status=422)
+        data.chapters = usable_chapters
+
         canonical_source_id = data.source_id
 
-        existing = Manga.objects.filter(source=scraper.name, source_id=canonical_source_id).first()
+        existing = Manga.objects.filter(
+            owner=request.user,
+            source=scraper.name,
+            source_id=canonical_source_id,
+        ).first()
         if existing and not force_refresh and existing.chapters.exists():
             return Response({
                 'status': 'exists',
@@ -215,6 +305,7 @@ class ImportMangaView(APIView):
             })
 
         manga = Manga.objects.create(
+            owner=request.user,
             title=data.title,
             alt_titles=data.alt_titles,
             author=data.author,
@@ -260,9 +351,9 @@ class ImportMangaView(APIView):
         })
 
 
-class MangaDetailView(APIView):
+class MangaDetailView(OwnedAPIView):
     def get(self, request, pk):
-        manga = get_object_or_404(Manga, pk=pk)
+        manga = _owned_manga(request, pk)
         manga_path = urlparse(manga.source_id).path
         if manga.source == "mangahere" and re.search(r"/c\d+(?:\.\d+)?/", manga_path):
             try:
@@ -278,16 +369,44 @@ class MangaDetailView(APIView):
             'cover': _image_proxy_url(manga.cover_url, manga.source),
             'status': manga.status,
             'content_type': manga.content_type,
+            'library_status': manga.library_status,
+            'tags': manga.tags,
             'source': manga.source,
             'source_id': manga.source_id,
             'chapters_downloaded': manga.downloaded_chapters_count,
             'total_chapters': manga.total_chapters_count,
         })
 
+    def patch(self, request, pk):
+        manga = _owned_manga(request, pk)
+        allowed_statuses = {value for value, _label in Manga.LIBRARY_STATUS_CHOICES}
+        if 'library_status' in request.data:
+            new_status = request.data['library_status']
+            if new_status not in allowed_statuses:
+                return Response({'error': 'Invalid library status'}, status=400)
+            manga.library_status = new_status
+        if 'tags' in request.data:
+            raw_tags = request.data['tags']
+            if not isinstance(raw_tags, list) or len(raw_tags) > 12:
+                return Response({'error': 'tags must be a list of at most 12 labels'}, status=400)
+            tags = []
+            seen_tags = set()
+            for raw_tag in raw_tags:
+                if not isinstance(raw_tag, str):
+                    return Response({'error': 'Each tag must be text'}, status=400)
+                tag = raw_tag.strip()[:32]
+                key = tag.casefold()
+                if tag and key not in seen_tags:
+                    tags.append(tag)
+                    seen_tags.add(key)
+            manga.tags = tags
+        manga.save(update_fields=['library_status', 'tags', 'updated_at'])
+        return Response({'library_status': manga.library_status, 'tags': manga.tags})
 
-class ChapterListView(APIView):
+
+class ChapterListView(OwnedAPIView):
     def get(self, request, pk):
-        manga = get_object_or_404(Manga, pk=pk)
+        manga = _owned_manga(request, pk)
         chapters = sorted(
             manga.chapters.all().only(
                 'id', 'chapter_number', 'title', 'downloaded', 'file_size',
@@ -327,23 +446,19 @@ class ChapterListView(APIView):
         })
 
 
-class ChapterPagesView(APIView):
+class ChapterPagesView(OwnedAPIView):
     """Return proxied image URLs for reading a chapter online."""
 
     def get(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
+        chapter = _owned_chapter(request, chapter_id)
         manga = chapter.manga
-        cache_key = f'reader-pages:v1:{chapter.pk}:{chapter.source_url}'
-        pages = cache.get(cache_key)
         try:
-            if pages is None:
-                scraper = get_scraper(manga.source, manga.source_id)
-                pages = scraper.get_chapter_pages(chapter.source_url)
-                if pages:
-                    cache.set(cache_key, pages, 30 * 60)
+            pages = get_chapter_page_urls(chapter)
+        except ChapterPageExtractionError as exc:
+            return Response({'error': str(exc)}, status=422)
         except Exception as exc:
             logger.error("Failed to get pages for chapter %s: %s", chapter_id, exc)
-            return Response({'error': f'Failed to load pages: {exc}'}, status=500)
+            return Response({'error': f'Could not load chapter pages: {exc}'}, status=502)
 
         # Proxy all image URLs through our server to bypass CORS/hotlink blocks
         proxied_pages = [
@@ -372,13 +487,11 @@ class ChapterPagesView(APIView):
         })
 
 
-class ChapterProgressView(APIView):
+class ChapterProgressView(OwnedAPIView):
     throttle_scope = 'progress'
 
     def get(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
-        if not request.user.is_authenticated:
-            return Response({'current_page': 0, 'completed': False})
+        chapter = _owned_chapter(request, chapter_id)
         progress = ReadingProgress.objects.filter(user=request.user, chapter=chapter).first()
         return Response({
             'current_page': progress.current_page if progress else 0,
@@ -386,9 +499,7 @@ class ChapterProgressView(APIView):
         })
 
     def post(self, request, chapter_id):
-        if not request.user.is_authenticated:
-            return Response({'error': 'Authentication required'}, status=status.HTTP_401_UNAUTHORIZED)
-        chapter = get_object_or_404(Chapter, id=chapter_id)
+        chapter = _owned_chapter(request, chapter_id)
         current_page = request.data.get('current_page')
         if isinstance(current_page, bool) or not isinstance(current_page, int) or not 0 <= current_page <= 10000:
             return Response({'error': 'current_page must be an integer between 0 and 10000'}, status=400)
@@ -407,7 +518,7 @@ class ChapterProgressView(APIView):
         })
 
 
-class DownloadChaptersView(APIView):
+class DownloadChaptersView(OwnedAPIView):
     throttle_scope = 'download'
 
     def post(self, request):
@@ -422,9 +533,9 @@ class DownloadChaptersView(APIView):
         except (TypeError, ValueError):
             return Response({'error': 'chapter_ids must contain integers'}, status=400)
 
-        first_ch = get_object_or_404(Chapter, id=chapter_ids[0])
+        first_ch = _owned_chapter(request, chapter_ids[0])
         manga = first_ch.manga
-        chapters = Chapter.objects.filter(id__in=chapter_ids, manga=manga)
+        chapters = Chapter.objects.filter(id__in=chapter_ids, manga=manga, manga__owner=request.user)
         if chapters.count() != len(set(chapter_ids)):
             return Response({'error': 'All chapters must belong to the same manga'}, status=400)
 
@@ -432,6 +543,8 @@ class DownloadChaptersView(APIView):
         task.chapters.set(chapters)
 
         result = _enqueue_or_run(download_chapters_task, run_download_chapters, task.id)
+        if result.get('unavailable'):
+            return Response({'error': 'Download worker is unavailable'}, status=503)
 
         return Response({
             'task_id': result["task_id"],
@@ -440,11 +553,11 @@ class DownloadChaptersView(APIView):
         })
 
 
-class DownloadVolumeView(APIView):
+class DownloadVolumeView(OwnedAPIView):
     throttle_scope = 'download'
 
     def post(self, request, volume_id):
-        volume = get_object_or_404(Volume, id=volume_id)
+        volume = get_object_or_404(Volume, id=volume_id, manga__owner=request.user)
 
         task = DownloadTask.objects.create(manga=volume.manga, status='pending')
         task.volumes.add(volume)
@@ -452,6 +565,8 @@ class DownloadVolumeView(APIView):
         result = _enqueue_or_run(
             download_volume_task, run_download_volume, task.id, volume_id
         )
+        if result.get('unavailable'):
+            return Response({'error': 'Download worker is unavailable'}, status=503)
 
         return Response({
             'task_id': result["task_id"],
@@ -459,34 +574,36 @@ class DownloadVolumeView(APIView):
         })
 
 
-class ChapterFileView(View):
+class ChapterFileView(LoginRequiredMixin, View):
     """Serve CBZ file — plain Django View so 404 is HTML, not JSON."""
     def get(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
-        if not chapter.file_path or not Path(chapter.file_path).exists():
+        chapter = get_object_or_404(Chapter, id=chapter_id, manga__owner=request.user)
+        if not is_current_chapter_archive(chapter):
             return HttpResponse('File not available yet. Download the chapter first.', status=404, content_type='text/plain')
         return _serve_download(chapter.file_path)
 
 
-class VolumeFileView(View):
+class VolumeFileView(LoginRequiredMixin, View):
     """Serve volume CBZ — plain Django View so 404 is HTML, not JSON."""
     def get(self, request, volume_id):
-        volume = get_object_or_404(Volume, id=volume_id)
-        if not volume.file_path or not Path(volume.file_path).exists():
+        volume = get_object_or_404(Volume, id=volume_id, manga__owner=request.user)
+        if not volume.downloaded or not volume.file_path or not Path(volume.file_path).exists():
             return HttpResponse('File not available yet. Download the volume first.', status=404, content_type='text/plain')
         return _serve_download(volume.file_path)
 
 
-class DownloadChapterView(APIView):
+class DownloadChapterView(OwnedAPIView):
     throttle_scope = 'download'
 
     def post(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
+        chapter = _owned_chapter(request, chapter_id)
 
         task = DownloadTask.objects.create(manga=chapter.manga, status='pending')
         task.chapters.add(chapter)
 
         result = _enqueue_or_run(download_chapters_task, run_download_chapters, task.id)
+        if result.get('unavailable'):
+            return Response({'error': 'Download worker is unavailable'}, status=503)
 
         return Response({
             'task_id': result["task_id"],
@@ -495,15 +612,15 @@ class DownloadChapterView(APIView):
         })
 
 
-class TaskStatusView(APIView):
+class TaskStatusView(OwnedAPIView):
     def get(self, request, task_id):
-        task = get_object_or_404(DownloadTask, id=task_id)
+        task = get_object_or_404(DownloadTask, id=task_id, manga__owner=request.user)
         # Include which chapters were actually downloaded so frontend
         # can trigger file downloads only for files that exist.
         downloaded_files = []
         if task.status == 'completed':
             for ch in task.chapters.filter(downloaded=True):
-                if ch.file_path and Path(ch.file_path).exists():
+                if is_current_chapter_archive(ch):
                     downloaded_files.append({
                         'chapter_id': ch.id,
                         'filename': Path(ch.file_path).name,
@@ -518,9 +635,9 @@ class TaskStatusView(APIView):
         })
 
 
-class LibraryView(APIView):
+class LibraryView(OwnedAPIView):
     def get(self, request):
-        manga_list = Manga.objects.annotate(
+        manga_list = Manga.objects.filter(owner=request.user).annotate(
             total_chapters=Count('chapters', distinct=True),
             downloaded_chapters=Count(
                 'chapters', filter=Q(chapters__downloaded=True), distinct=True,
@@ -544,6 +661,8 @@ class LibraryView(APIView):
                     'chapters': m.total_chapters,
                     'downloaded': m.downloaded_chapters,
                     'content_type': m.content_type,
+                    'library_status': m.library_status,
+                    'tags': m.tags,
                     'reading': (
                         {
                             'chapter_id': reading_by_manga[m.id].chapter_id,
@@ -623,9 +742,9 @@ class ImageProxyView(APIView):
             return Response({'error': f'Failed to fetch image: {exc}'}, status=502)
 
 
-class DeleteMangaView(APIView):
+class DeleteMangaView(OwnedAPIView):
     def delete(self, request, pk):
-        manga = get_object_or_404(Manga, pk=pk)
+        manga = _owned_manga(request, pk)
         title = manga.title
         manga.delete()
         return Response({'status': 'deleted', 'title': title})

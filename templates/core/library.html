@@ -17,6 +17,10 @@
 .filter-bar { display: flex; gap: .5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
 .filter-bar .input { flex: 1; min-width: 200px; }
 .filter-bar .select-styled { min-width: 145px; }
+.library-card-link { display: block; color: inherit; text-decoration: none; }
+.library-card-controls { display: flex; gap: .4rem; align-items: center; padding: 0 .7rem .7rem; }
+.library-card-controls select, .library-card-controls button { min-width: 0; padding: .35rem; font-size: .72rem; }
+.library-tags { display: flex; gap: .25rem; flex-wrap: wrap; padding: 0 .7rem .6rem; }
 </style>
 {% endblock %}
 
@@ -33,6 +37,12 @@
     <input type="search" class="input" id="filterInput" placeholder="Filter library..." aria-label="Search your library">
     <select class="select-styled" id="typeFilter" aria-label="Filter by format"><option value="">All formats</option></select>
     <select class="select-styled" id="sourceFilter" aria-label="Filter by source"><option value="">All sources</option></select>
+    <select class="select-styled" id="statusFilter" aria-label="Filter by reading status">
+        <option value="">All statuses</option>
+        <option value="unread">Unread</option><option value="reading">Reading</option>
+        <option value="completed">Completed</option><option value="paused">Paused</option>
+        <option value="dropped">Dropped</option>
+    </select>
     <select class="select-styled" id="sortFilter" aria-label="Sort library">
         <option value="recent">Recently added</option>
         <option value="title">Title A to Z</option>
@@ -59,11 +69,13 @@ function renderLibrary(items) {
     }
     document.getElementById('empty-state').style.display = 'none';
     items.forEach(function(m) {
-        var card = document.createElement('a');
-        card.href = m.reading
+        var card = document.createElement('article');
+        card.className = 'card';
+        var link = document.createElement('a');
+        link.className = 'library-card-link';
+        link.href = m.reading
             ? '/reader/' + m.reading.chapter_id + '/?page=' + m.reading.page
             : '/manga/' + m.id + '/';
-        card.className = 'card';
         var image = document.createElement('img');
         image.src = m.cover || '';
         image.alt = m.title || 'Manga cover';
@@ -97,7 +109,42 @@ function renderLibrary(items) {
         sourceBadge.textContent = (m.source || '').toUpperCase();
         badges.append(typeBadge, sourceBadge);
         body.append(title, chapterCount, badges);
-        card.append(image, body);
+        link.append(image, body);
+        card.appendChild(link);
+        if (m.tags && m.tags.length) {
+            var tags = document.createElement('div');
+            tags.className = 'library-tags';
+            m.tags.forEach(function(tag) {
+                var badge = document.createElement('span');
+                badge.className = 'badge badge-muted';
+                badge.textContent = tag;
+                tags.appendChild(badge);
+            });
+            card.appendChild(tags);
+        }
+        var controls = document.createElement('div');
+        controls.className = 'library-card-controls';
+        var state = document.createElement('select');
+        state.className = 'select-styled';
+        state.setAttribute('aria-label', 'Reading status for ' + m.title);
+        [['unread', 'Unread'], ['reading', 'Reading'], ['completed', 'Completed'], ['paused', 'Paused'], ['dropped', 'Dropped']].forEach(function(optionData) {
+            var option = new Option(optionData[1], optionData[0], false, (m.library_status || 'unread') === optionData[0]);
+            state.add(option);
+        });
+        state.addEventListener('click', function(event) { event.stopPropagation(); });
+        state.addEventListener('change', function() { updateMangaOrganization(m, { library_status: state.value }); });
+        var tagsButton = document.createElement('button');
+        tagsButton.type = 'button';
+        tagsButton.className = 'btn btn-ghost btn-sm';
+        tagsButton.textContent = 'Labels';
+        tagsButton.addEventListener('click', function(event) {
+            event.stopPropagation();
+            var value = window.prompt('Comma-separated labels (up to 12)', (m.tags || []).join(', '));
+            if (value === null) return;
+            updateMangaOrganization(m, { tags: value.split(',').map(function(tag) { return tag.trim(); }).filter(Boolean).slice(0, 12) });
+        });
+        controls.append(state, tagsButton);
+        card.appendChild(controls);
         grid.appendChild(card);
     });
 }
@@ -128,10 +175,14 @@ function applyLibraryFilters() {
     var query = document.getElementById('filterInput').value.trim().toLowerCase();
     var type = document.getElementById('typeFilter').value;
     var source = document.getElementById('sourceFilter').value;
+    var libraryStatus = document.getElementById('statusFilter').value;
     var sort = document.getElementById('sortFilter').value;
     var matches = allManga.filter(function(manga) {
-        return (!query || manga.title.toLowerCase().includes(query)) &&
-            (!type || manga.content_type === type) && (!source || manga.source === source);
+        var queryMatches = !query || manga.title.toLowerCase().includes(query) ||
+            (manga.tags || []).some(function(tag) { return tag.toLowerCase().includes(query); });
+        return queryMatches && (!type || manga.content_type === type) &&
+            (!source || manga.source === source) &&
+            (!libraryStatus || manga.library_status === libraryStatus);
     });
     matches.sort(function(a, b) {
         if (sort === 'title') return a.title.localeCompare(b.title);
@@ -142,7 +193,22 @@ function applyLibraryFilters() {
     renderLibrary(matches);
 }
 
-['filterInput', 'typeFilter', 'sourceFilter', 'sortFilter'].forEach(function(id) {
+function updateMangaOrganization(manga, changes) {
+    apiFetch('/api/manga/' + manga.id + '/', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(changes)
+    }).then(function(response) {
+        return response.json().then(function(data) {
+            if (!response.ok) throw new Error(data.error || 'Could not update library item');
+            Object.assign(manga, data);
+            applyLibraryFilters();
+            showToast('Library item updated', 'success');
+        });
+    }).catch(function(error) { showToast(error.message || 'Could not update item', 'error'); });
+}
+
+['filterInput', 'typeFilter', 'sourceFilter', 'statusFilter', 'sortFilter'].forEach(function(id) {
     document.getElementById(id).addEventListener(id === 'filterInput' ? 'input' : 'change', applyLibraryFilters);
 });
 </script>

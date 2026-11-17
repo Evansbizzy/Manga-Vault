@@ -1,0 +1,15 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Content and Source Policy | MangaVault{% endblock %}
+{% block meta_description %}MangaVault's source policy explains content attribution, permitted access, rights-holder requests, and reporting concerns.{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Content policy</li></ol></nav>{% endblock %}
+
+{% block content %}
+<main class="editorial-page legal-page">
+    <header class="editorial-hero"><span class="eyebrow">Respect creators and sources</span><h1>Content and source policy.</h1><p>MangaVault is a tool for organizing and reading content from third-party sources. It does not own that content or authorize its use.</p></header>
+    <section class="editorial-section"><h2>Source rules</h2><p>Use only sources that you are allowed to access. MangaVault integrations must use publicly documented interfaces or pages that permit automated access. The app must not defeat paywalls, DRM, logins, CAPTCHA, anti-bot checks, or source rate limits. A source being technically reachable does not mean its content is licensed for every use.</p></section>
+    <section class="editorial-section"><h2>Rights-holder requests</h2><p>If you believe a source link or item associated with a MangaVault instance infringes your rights, contact the instance operator with the exact title, source URL, relevant material, and an explanation of your rights. The operator should investigate and disable the relevant listing or integration when appropriate. MangaVault does not control upstream provider pages or their hosting.</p><p>{% if SITE_CONTACT_EMAIL %}Contact: <a href="mailto:{{ SITE_CONTACT_EMAIL|urlencode }}">{{ SITE_CONTACT_EMAIL }}</a>.{% else %}Contact the administrator of the MangaVault instance you use. The operator should configure <code>SITE_CONTACT_EMAIL</code> before public launch.{% endif %}</p></section>
+    <section class="editorial-section"><h2>Attribution and limitations</h2><p>Search results identify their provider. Metadata-only catalogs open on the provider and cannot be imported as reader sources. MangaVault does not claim affiliation with any listed provider and cannot guarantee that provider data is accurate, authorized, or available.</p></section>
+    <p class="policy-note">Instance operators are responsible for choosing integrations, handling complaints, and reviewing applicable law. This policy is a product statement, not a substitute for legal advice.</p>
+</main>
+{% endblock %}

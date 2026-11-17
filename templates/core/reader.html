@@ -24,6 +24,8 @@
 .reader-modes { display: flex; gap: .3rem; }
 .reader-modes button { border: none; background: var(--bg-secondary); color: var(--text-secondary); padding: .4rem .7rem; border-radius: var(--radius-sm); cursor: pointer; font-size: .8rem; transition: all .2s; }
 .reader-modes button.active { background: var(--accent); color: #fff; }
+.reader-modes button:focus-visible { outline: 2px solid var(--accent-secondary); outline-offset: 2px; }
+.reader-direction { border: 1px solid var(--border); background: transparent; color: var(--text-secondary); padding: .4rem .65rem; border-radius: var(--radius-sm); cursor: pointer; font: inherit; font-size: .8rem; }
 
 .reader-viewport { max-width: 900px; margin: 0 auto; }
 .reader-viewport.mode-scroll img { width: 100%; display: block; margin-bottom: 4px; }
@@ -38,6 +40,13 @@
 .page-indicator i { width: 14px; height: 14px; }
 
 .reader-loading { text-align: center; padding: 3rem; }
+@media (max-width: 720px) {
+    .reader-nav { align-items: stretch; flex-wrap: wrap; gap: .65rem; }
+    .reader-nav .info { order: -1; flex: 1 0 100%; }
+    .reader-nav .info h1 { font-size: 1rem; }
+    .reader-modes { margin-left: auto; }
+    .reader-viewport.mode-single img { max-height: 78vh; }
+}
 </style>
 {% endblock %}
 
@@ -48,9 +57,10 @@
         <h1>{{ manga.title }}</h1>
         <div class="sub">Chapter {{ chapter.chapter_number }}{% if chapter.title %} - {{ chapter.title }}{% endif %}</div>
     </div>
-    <div class="reader-modes">
-        <button onclick="setMode('scroll')" id="mode-scroll" class="active">Scroll</button>
-        <button onclick="setMode('single')" id="mode-single">Page</button>
+    <div class="reader-modes" aria-label="Reader settings">
+        <button type="button" onclick="setMode('scroll')" id="mode-scroll" class="active" aria-pressed="true">Scroll</button>
+        <button type="button" onclick="setMode('single')" id="mode-single" aria-pressed="false">Page</button>
+        <button type="button" onclick="toggleDirection()" id="direction-toggle" class="reader-direction" aria-label="Reading direction: left to right">LTR</button>
     </div>
 </div>
 
@@ -72,9 +82,19 @@ var chapterId = {{ chapter.id }};
 var pages = [];
 var currentPage = 0;
 var mode = 'scroll';
+var readingDirection = 'ltr';
 var canSyncProgress = {{ user.is_authenticated|yesno:'true,false' }};
 var progressStorageKey = 'mangavault-progress-' + chapterId;
+var preferenceStorageKey = 'mangavault-reader-preferences';
 var progressSaveTimer;
+var pageObserver;
+var progressRestored = false;
+
+try {
+    var readerPreferences = JSON.parse(localStorage.getItem(preferenceStorageKey) || '{}');
+    if (readerPreferences.mode === 'single' || readerPreferences.mode === 'scroll') mode = readerPreferences.mode;
+    if (readerPreferences.direction === 'rtl') readingDirection = 'rtl';
+} catch (error) {}
 
 fetch('/api/chapter/' + chapterId + '/pages/')
     .then(function(r) { return r.json(); })
@@ -106,6 +126,7 @@ fetch('/api/chapter/' + chapterId + '/pages/')
             img.src = url;
             img.alt = 'Page ' + (i + 1);
             img.loading = 'lazy';
+            img.decoding = 'async';
             img.onerror = function() {
                 this.alt = 'Failed to load page ' + (i + 1);
                 this.style.minHeight = '200px';
@@ -116,6 +137,8 @@ fetch('/api/chapter/' + chapterId + '/pages/')
         });
 
         vp.style.display = 'block';
+        pageObserver = new IntersectionObserver(trackVisiblePages, { threshold: [0, .25, .5, .75, 1] });
+        vp.querySelectorAll('img').forEach(function(img) { pageObserver.observe(img); });
         document.getElementById('reader-footer').style.display = 'flex';
         document.getElementById('page-info').textContent = pages.length + ' pages';
 
@@ -143,8 +166,12 @@ fetch('/api/chapter/' + chapterId + '/pages/')
 function setMode(m) {
     mode = m;
     var vp = document.getElementById('viewport');
-    document.getElementById('mode-scroll').classList.toggle('active', m === 'scroll');
-    document.getElementById('mode-single').classList.toggle('active', m === 'single');
+    var scrollButton = document.getElementById('mode-scroll');
+    var singleButton = document.getElementById('mode-single');
+    scrollButton.classList.toggle('active', m === 'scroll');
+    singleButton.classList.toggle('active', m === 'single');
+    scrollButton.setAttribute('aria-pressed', String(m === 'scroll'));
+    singleButton.setAttribute('aria-pressed', String(m === 'single'));
 
     if (m === 'scroll') {
         vp.className = 'reader-viewport mode-scroll';
@@ -161,6 +188,21 @@ function setMode(m) {
         });
         updatePageInfo();
     }
+    saveReaderPreferences();
+}
+
+function saveReaderPreferences() {
+    try {
+        localStorage.setItem(preferenceStorageKey, JSON.stringify({ mode: mode, direction: readingDirection }));
+    } catch (error) {}
+}
+
+function toggleDirection() {
+    readingDirection = readingDirection === 'ltr' ? 'rtl' : 'ltr';
+    var button = document.getElementById('direction-toggle');
+    button.textContent = readingDirection.toUpperCase();
+    button.setAttribute('aria-label', 'Reading direction: ' + (readingDirection === 'rtl' ? 'right to left' : 'left to right'));
+    saveReaderPreferences();
 }
 
 function updatePageInfo() {
@@ -186,7 +228,12 @@ function applyReadingProgress(progress) {
     var pageFromUrl = new URLSearchParams(window.location.search).get('page');
     var savedPage = pageFromUrl === null ? progress.current_page : Number(pageFromUrl);
     currentPage = Number.isInteger(savedPage) ? Math.max(0, Math.min(savedPage, pages.length - 1)) : 0;
-    setMode(currentPage > 0 ? 'single' : 'scroll');
+    progressRestored = true;
+    setMode(mode);
+    if (mode === 'scroll' && currentPage > 0) {
+        var resumeImage = document.getElementById('viewport').querySelectorAll('img')[currentPage];
+        if (resumeImage) window.setTimeout(function() { resumeImage.scrollIntoView({ block: 'start' }); }, 0);
+    }
 }
 
 function restoreReadingProgress() {
@@ -224,25 +271,29 @@ function saveReadingProgress() {
     }, 1500);
 }
 
-window.addEventListener('scroll', function() {
-    if (mode !== 'scroll') return;
-    var imgs = document.getElementById('viewport').querySelectorAll('img');
-    for (var index = 0; index < imgs.length; index++) {
-        if (imgs[index].getBoundingClientRect().bottom > 150) {
-            if (currentPage !== index) {
-                currentPage = index;
-                saveReadingProgress();
-            }
-            break;
-        }
+function trackVisiblePages(entries) {
+    if (!progressRestored || mode !== 'scroll') return;
+    var mostVisible = entries.reduce(function(best, entry) {
+        return entry.isIntersecting && (!best || entry.intersectionRatio > best.intersectionRatio) ? entry : best;
+    }, null);
+    if (!mostVisible) return;
+    var index = Array.prototype.indexOf.call(mostVisible.target.parentNode.children, mostVisible.target);
+    if (index >= 0 && currentPage !== index) {
+        currentPage = index;
+        saveReadingProgress();
     }
-}, { passive: true });
+}
 
 document.addEventListener('keydown', function(e) {
     if (mode === 'single') {
-        if (e.key === 'ArrowRight' || e.key === 'd') goToPage(1);
-        if (e.key === 'ArrowLeft' || e.key === 'a') goToPage(-1);
+        var forwardKey = readingDirection === 'rtl' ? 'ArrowLeft' : 'ArrowRight';
+        var backKey = readingDirection === 'rtl' ? 'ArrowRight' : 'ArrowLeft';
+        if (e.key === forwardKey || e.key.toLowerCase() === 'd') { e.preventDefault(); goToPage(1); }
+        if (e.key === backKey || e.key.toLowerCase() === 'a') { e.preventDefault(); goToPage(-1); }
     }
 });
+
+document.getElementById('direction-toggle').textContent = readingDirection.toUpperCase();
+document.getElementById('direction-toggle').setAttribute('aria-label', 'Reading direction: ' + (readingDirection === 'rtl' ? 'right to left' : 'left to right'));
 </script>
 {% endblock %}

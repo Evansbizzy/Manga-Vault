@@ -30,7 +30,7 @@ class MangaPillScraper(BaseScraper):
 
     def search(self, query: str) -> List[MangaData]:
         url = f"{self.base_url}/search?q={quote_plus(query)}"
-        resp = self.get(url)
+        resp = self.get(url, timeout=(4, 12))
         soup = BeautifulSoup(resp.text, "html.parser")
         results: List[MangaData] = []
 
@@ -167,21 +167,30 @@ class MangaPillScraper(BaseScraper):
         soup = BeautifulSoup(resp.text, "html.parser")
 
         pages: List[str] = []
+        reader_images = soup.select(
+            "#reader img, .reader img, #chapter-reader img, .chapter-reader img, "
+            ".chapter-pages img, .pages img, img[alt*='page' i]"
+        )
+        reader_image_ids = {id(image) for image in reader_images}
         for img in soup.find_all("img"):
-            src = img.get("data-src") or img.get("src") or ""
+            src = next((value for value in (
+                img.get("data-src"), img.get("data-lazy-src"), img.get("data-original"),
+                img.get("data-original-src"), img.get("data-url"), img.get("src"),
+            ) if value and not value.strip().lower().startswith("data:")), "")
+            if not src:
+                srcset = img.get("data-srcset") or img.get("srcset") or ""
+                src = srcset.split(",", 1)[0].strip().split(" ", 1)[0] if srcset else ""
             if not src:
                 continue
             full = urljoin(url, src.strip())
-            # MangaPill CDN images contain /file/mangap/ or are numbered chapter pages
             parsed = urlparse(full)
             path_lower = parsed.path.lower()
-            if any(k in full.lower() for k in ["mangap", "chapter", "/file/"]):
-                if full not in pages:
-                    pages.append(full)
-            elif path_lower.endswith((".jpg", ".jpeg", ".png", ".webp", ".gif", ".avif")):
-                # Numbered page images
-                if full not in pages:
-                    pages.append(full)
+            is_reader_image = id(img) in reader_image_ids
+            is_known_page_path = any(
+                marker in path_lower for marker in ("/file/mangap/", "/chapter/", "/uploads/")
+            )
+            if (is_reader_image or is_known_page_path) and full not in pages:
+                pages.append(full)
 
         return pages
 

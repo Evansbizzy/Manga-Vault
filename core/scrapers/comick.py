@@ -5,7 +5,7 @@ import random
 import re
 import time
 from typing import List, Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 from .base import BaseScraper, ChapterData, MangaData
 
@@ -16,7 +16,7 @@ class ComickScraper(BaseScraper):
     """
     Scraper for Comick.io — uses the public JSON API.
 
-    API base: https://api.comick.io
+    API base: https://api.comick.dev
     Endpoints:
         - Search:   GET /v1.0/search?q=<query>&limit=25&page=1
         - Details:  GET /comic/<slug>  (returns manga info)
@@ -26,16 +26,20 @@ class ComickScraper(BaseScraper):
 
     name = "comick"
     label = "Comick.io"
-    base_url = "https://comick.io"
-    api_base = "https://api.comick.io"
+    base_url = "https://comick.dev"
+    api_base = "https://api.comick.dev"
     supports_search = True
     supports_url_import = True
 
-    _slug_re = re.compile(r"comick\.(?:io|app)/comic/([^/]+)")
+    _slug_re = re.compile(r"comick\.(?:dev|io|app)/comic/([^/]+)")
 
     @classmethod
     def can_handle(cls, reference: str) -> bool:
-        return "comick.io" in reference.lower() or "comick.app" in reference.lower()
+        host = (urlparse(reference).hostname or "").lower()
+        return any(
+            host == domain or host.endswith(f".{domain}")
+            for domain in ("comick.dev", "comick.io", "comick.app")
+        )
 
     # ------------------------------------------------------------------
     # Search
@@ -43,7 +47,7 @@ class ComickScraper(BaseScraper):
 
     def search(self, query: str) -> List[MangaData]:
         url = f"{self.api_base}/v1.0/search?q={quote_plus(query)}&limit=25&page=1"
-        resp = self._api_get(url)
+        resp = self._api_get(url, timeout=(4, 12))
         results: List[MangaData] = []
 
         for item in resp:
@@ -124,8 +128,8 @@ class ComickScraper(BaseScraper):
     # ------------------------------------------------------------------
 
     def get_chapter_pages(self, chapter_url: str) -> List[str]:
-        # chapter_url is like https://api.comick.io/chapter/<hid>
-        # or https://comick.io/comic/<slug>/<chap-hid>-chapter-N-en
+        # chapter_url is like https://api.comick.dev/chapter/<hid>
+        # or https://comick.dev/comic/<slug>/<chap-hid>-chapter-N-en
         hid = self._extract_chapter_hid(chapter_url)
         url = f"{self.api_base}/chapter/{hid}"
         data = self._api_get(url)
@@ -147,13 +151,13 @@ class ComickScraper(BaseScraper):
     # Helpers
     # ------------------------------------------------------------------
 
-    def _api_get(self, url: str):
+    def _api_get(self, url: str, timeout=30):
         """Make API request with proper headers and rate limiting."""
         time.sleep(random.uniform(0.3, 0.8))
         resp = self.get(url, headers={
             "Accept": "application/json",
             "Referer": f"{self.base_url}/",
-        })
+        }, timeout=timeout)
         return resp.json()
 
     def _fetch_all_chapters(self, hid: str) -> List[ChapterData]:
@@ -209,7 +213,7 @@ class ComickScraper(BaseScraper):
         return source_id.rstrip("/").rsplit("/", 1)[-1]
 
     def _extract_chapter_hid(self, chapter_url: str) -> str:
-        # From API URL: https://api.comick.io/chapter/<hid>
+        # From API URL: https://api.comick.dev/chapter/<hid>
         if "/chapter/" in chapter_url:
             parts = chapter_url.rstrip("/").split("/chapter/")
             if len(parts) > 1:

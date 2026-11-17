@@ -1,0 +1,16 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Privacy Policy | MangaVault{% endblock %}
+{% block meta_description %}Understand what MangaVault stores, how reading progress works, and when manga-source providers receive requests.{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Privacy</li></ol></nav>{% endblock %}
+
+{% block content %}
+<main class="editorial-page legal-page">
+    <header class="editorial-hero"><span class="eyebrow">Last updated November 11, 2026</span><h1>Privacy, plainly stated.</h1><p>This page describes the information used by the MangaVault software. The operator of each deployed instance controls its hosting, logs, backups, and account practices.</p></header>
+    <section class="editorial-section"><h2>Information stored by MangaVault</h2><ul><li>Account usernames and password hashes managed by Django when accounts are enabled.</li><li>Imported series and chapter metadata, downloaded-file status, and per-user reading progress.</li><li>CBZ archives and manga covers saved by the instance.</li><li>Session and CSRF cookies needed for sign-in and secure requests.</li></ul><p>In development, anonymous reading progress can be kept in your browser's local storage. The application does not currently include advertising or analytics code.</p></section>
+    <section class="editorial-section"><h2>Requests to other services</h2><p>When you search, your query is sent to the selected search providers. MangaUpdates queries are cached for up to six hours. When you read or download a chapter, the instance requests page images from that source and may proxy those images through its server. The source and hosting provider may receive request metadata such as IP addresses and timestamps under their own policies.</p><p>External services have their own privacy terms. MangaVault cannot control how they handle requests after they receive them.</p></section>
+    <section class="editorial-section"><h2>Retention and access</h2><p>Library records, progress, and downloaded files remain until the instance administrator deletes them or removes the deployment data. Production access is sign-in gated. The catalog is shared between authenticated accounts in this version, so do not create accounts for untrusted users.</p><p>Hosting providers may retain operational logs and backups according to the operator's configuration. Configure retention, backups, and deletion practices before opening the service to other people.</p></section>
+    <section class="editorial-section"><h2>Your choices</h2><p>You can stop using the instance and clear MangaVault progress stored in your browser. Ask the instance administrator to correct or delete account data and downloaded files. There is no public self-registration in the current application.</p><p>{% if SITE_CONTACT_EMAIL %}Privacy contact: <a href="mailto:{{ SITE_CONTACT_EMAIL|urlencode }}">{{ SITE_CONTACT_EMAIL }}</a>.{% else %}For privacy questions, contact the administrator of the MangaVault instance you use.{% endif %}</p></section>
+    <p class="policy-note">This is a software privacy summary, not legal advice. The site operator should review it for the laws and services that apply to their deployment.</p>
+</main>
+{% endblock %}

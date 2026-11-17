@@ -1,0 +1,30 @@
+{% extends 'core/base.html' %}
+
+{% block title %}About MangaVault{% endblock %}
+{% block meta_description %}Learn what MangaVault does, how its manga sources work, and what to expect from the reader and downloads.{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">About</li></ol></nav>{% endblock %}
+
+{% block content %}
+<main class="editorial-page">
+    <header class="editorial-hero">
+        <span class="eyebrow">A personal reading shelf</span>
+        <h1>Stories, gathered in one place.</h1>
+        <p>MangaVault helps you discover series from supported sources, keep a personal library, follow your reading progress, and prepare chapters as CBZ files.</p>
+    </header>
+    <section class="editorial-section">
+        <h2>How it works</h2>
+        <p>Search runs against the sources listed in the app. Reader-capable sources can be imported into a library entry. Catalog-only sources are clearly marked and open on their own site instead. MangaVault does not own or publish the works returned by those providers.</p>
+        <p>Chapter pages are requested from the selected source when you read or prepare a download. Sources may change, restrict access, or become unavailable, so a result is not a promise that every chapter will load.</p>
+    </section>
+    <section class="editorial-section">
+        <h2>Built for your collection</h2>
+        <p>Your library keeps series, chapters, downloaded-file status, and reading progress together. In the current deployment model, authenticated accounts share the catalog. Do not invite people you do not trust until per-account library ownership is implemented.</p>
+        <p>MangaVault is an independent project and is not affiliated with MangaDex, Comick, MangaUpdates, or other content providers.</p>
+    </section>
+    <nav class="policy-links" aria-label="Policies">
+        <a href="{% url 'privacy_policy' %}">Privacy</a>
+        <a href="{% url 'terms_of_service' %}">Terms</a>
+        <a href="{% url 'content_policy' %}">Content policy</a>
+    </nav>
+</main>
+{% endblock %}

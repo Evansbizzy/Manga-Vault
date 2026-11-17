@@ -25,7 +25,9 @@ from .base import BaseScraper, ChapterData, MangaData
 class MangaKakalotScraper(BaseScraper):
     name = "mangakakalot"
     label = "MangaKakalot (legacy)"
-    supports_search = True
+    # The old domains currently serve parked/dead pages. Keep legacy URL imports,
+    # but do not advertise an unreliable search source in the unified catalog.
+    supports_search = False
     supports_url_import = True
 
     _chapter_hint_re = re.compile(

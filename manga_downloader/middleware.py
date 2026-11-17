@@ -23,6 +23,13 @@ class ProductionLoginRequiredMiddleware:
         return (
             path == reverse('login')
             or path == '/robots.txt'
+            or path == reverse('healthz')
+            or path in {
+                reverse('about'),
+                reverse('privacy_policy'),
+                reverse('terms_of_service'),
+                reverse('content_policy'),
+            }
             or path.startswith(settings.STATIC_URL)
             or path.startswith(settings.MEDIA_URL)
         )

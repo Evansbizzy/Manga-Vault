@@ -39,11 +39,12 @@ def validate_public_http_url(url):
     cache.set(cache_key, True, 60)
 
 
-def safe_get(session, url, *, allow_redirects=True, max_redirects=5, **kwargs):
+def safe_request(session, method, url, *, allow_redirects=True, max_redirects=5, **kwargs):
     current_url = url
+    current_method = method.upper()
     for redirect_count in range(max_redirects + 1):
         validate_public_http_url(current_url)
-        response = session.get(current_url, allow_redirects=False, **kwargs)
+        response = session.request(current_method, current_url, allow_redirects=False, **kwargs)
         if response.status_code not in {301, 302, 303, 307, 308}:
             return response
 
@@ -56,6 +57,14 @@ def safe_get(session, url, *, allow_redirects=True, max_redirects=5, **kwargs):
 
         next_url = urljoin(current_url, location)
         response.close()
+        if response.status_code == 303 or (response.status_code in {301, 302} and current_method != 'GET'):
+            current_method = 'GET'
+            kwargs.pop('data', None)
+            kwargs.pop('json', None)
         current_url = next_url
 
     raise requests.TooManyRedirects('Too many redirects')
+
+
+def safe_get(session, url, **kwargs):
+    return safe_request(session, 'GET', url, **kwargs)

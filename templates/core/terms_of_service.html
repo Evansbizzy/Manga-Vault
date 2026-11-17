@@ -1,0 +1,17 @@
+{% extends 'core/base.html' %}
+
+{% block title %}Terms of Service | MangaVault{% endblock %}
+{% block meta_description %}Read the terms for using MangaVault, including source availability, user responsibilities, downloads, and account access.{% endblock %}
+{% block breadcrumbs %}<nav class="breadcrumbs" aria-label="Breadcrumb"><ol><li><a href="{% url 'index' %}">Home</a></li><li aria-current="page">Terms</li></ol></nav>{% endblock %}
+
+{% block content %}
+<main class="editorial-page legal-page">
+    <header class="editorial-hero"><span class="eyebrow">Last updated November 11, 2026</span><h1>Terms of service.</h1><p>By using a MangaVault instance, you agree to use it responsibly and follow the rules that apply to your location and the sources you choose.</p></header>
+    <section class="editorial-section"><h2>What the software provides</h2><p>MangaVault is a self-hostable discovery, library, reading-progress, and chapter-packaging application. It can request data and images from third-party manga sources, but it does not grant rights to material supplied by those sources. Source availability, metadata, and chapter quality are not guaranteed.</p></section>
+    <section class="editorial-section"><h2>Your responsibilities</h2><ul><li>Use sources and download material only when you have the right to access and store it.</li><li>Follow the terms and rate limits of every source.</li><li>Do not use MangaVault to bypass paywalls, DRM, account controls, CAPTCHA, or other access restrictions.</li><li>Protect your login and do not share an account unless the instance operator permits it.</li><li>Do not attempt to overload providers or the MangaVault instance.</li></ul></section>
+    <section class="editorial-section"><h2>Accounts and availability</h2><p>The instance operator manages accounts. Public self-registration is not available. The library is shared between authenticated accounts in the current version. The service may be changed or unavailable when the host, network, or upstream source is unavailable.</p></section>
+    <section class="editorial-section"><h2>Third-party works and providers</h2><p>Titles, covers, descriptions, and pages belong to their respective owners or providers. Provider names and marks are used only to identify sources. MangaVault is independent and does not claim endorsement by those providers.</p></section>
+    <section class="editorial-section"><h2>Contact</h2><p>{% if SITE_CONTACT_EMAIL %}Contact the instance operator at <a href="mailto:{{ SITE_CONTACT_EMAIL|urlencode }}">{{ SITE_CONTACT_EMAIL }}</a>.{% else %}Contact the administrator of the MangaVault instance you use.{% endif %}</p></section>
+    <p class="policy-note">These starter terms should be reviewed and adapted by the operator before public deployment. They are not legal advice and may not satisfy every jurisdiction's requirements.</p>
+</main>
+{% endblock %}

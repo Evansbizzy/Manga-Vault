@@ -3,6 +3,11 @@ from . import views
 
 urlpatterns = [
     path('robots.txt', views.robots_txt, name='robots_txt'),
+    path('healthz/', views.healthz, name='healthz'),
+    path('about/', views.AboutPageView.as_view(), name='about'),
+    path('privacy/', views.PrivacyPolicyPageView.as_view(), name='privacy_policy'),
+    path('terms/', views.TermsOfServicePageView.as_view(), name='terms_of_service'),
+    path('content-policy/', views.ContentPolicyPageView.as_view(), name='content_policy'),
     path('', views.IndexView.as_view(), name='index'),
     path('search/', views.SearchPageView.as_view(), name='search'),
     path('library/', views.LibraryPageView.as_view(), name='library'),

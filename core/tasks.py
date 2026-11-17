@@ -43,11 +43,12 @@ def _download_chapters(task_id: int):
                     task.message = f"Ch. {chapter.chapter_number} downloaded"
                     task.save()
                 else:
-                    logger.warning("No pages for chapter %s", chapter.chapter_number)
-                    failures.append(chapter.chapter_number)
+                    reason = "source returned no images"
+                    logger.warning("Chapter %s failed: %s", chapter.chapter_number, reason)
+                    failures.append((chapter.chapter_number, reason))
             except Exception as exc:
                 logger.warning("Failed to prepare ch %s: %s", chapter.chapter_number, exc)
-                failures.append(chapter.chapter_number)
+                failures.append((chapter.chapter_number, str(exc)))
 
             task.progress = slice_end
             task.save()
@@ -56,9 +57,10 @@ def _download_chapters(task_id: int):
         task.progress = 100
         task.message = f"{success_count}/{total} chapters ready for download"
         if failures:
-            task.message += f"; failed chapters: {', '.join(failures[:20])}"
-            if len(failures) > 20:
-                task.message += f" and {len(failures) - 20} more"
+            failure_details = [f"Ch. {number}: {reason[:180]}" for number, reason in failures[:5]]
+            task.message += "; failures: " + " | ".join(failure_details)
+            if len(failures) > 5:
+                task.message += f" | and {len(failures) - 5} more"
         task.completed_at = timezone.now()
         task.save()
 

@@ -4,11 +4,15 @@ from pathlib import Path
 
 from django.core.cache import cache
 from django.contrib.auth.views import LoginView
+from django.contrib.auth.mixins import LoginRequiredMixin
 from django.http import FileResponse, HttpResponse
+from django.db.models import Count
+from django.db import connection
+from django.core.cache import cache
 from django.views.generic import TemplateView, DetailView
 from django.views import View
 from django.shortcuts import render, get_object_or_404
-from .models import Manga, Chapter, Volume
+from .models import Manga, Chapter, Volume, ReadingProgress
 from .scrapers import get_scraper
 from .utils.downloads import download_chapter, download_volume
 
@@ -50,6 +54,20 @@ def robots_txt(request):
     )
 
 
+def healthz(request):
+    try:
+        with connection.cursor() as cursor:
+            cursor.execute('SELECT 1')
+            cursor.fetchone()
+        cache.set('health-check', 'ok', timeout=15)
+        if cache.get('health-check') != 'ok':
+            raise RuntimeError('cache read-after-write failed')
+    except Exception:
+        logger.exception('Health check dependency failed')
+        return HttpResponse('unhealthy', status=503, content_type='text/plain; charset=utf-8')
+    return HttpResponse('ok', content_type='text/plain; charset=utf-8')
+
+
 def page_not_found(request, exception):
     return render(request, '404.html', status=404)
 
@@ -59,7 +77,26 @@ class IndexView(TemplateView):
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)
-        context['manga_list'] = Manga.objects.all().order_by('-created_at')[:12]
+        manga_query = Manga.objects.filter(owner=self.request.user) if self.request.user.is_authenticated else Manga.objects.none()
+        context['manga_list'] = manga_query.annotate(
+            chapter_count=Count('chapters', distinct=True),
+        ).order_by('-created_at')[:12]
+        if self.request.user.is_authenticated:
+            context['continue_reading'] = [
+                {
+                    'progress': progress,
+                    'percent': min(
+                        100,
+                        int((progress.current_page + 1) * 100 / progress.chapter.page_count),
+                    ) if progress.chapter.page_count else 0,
+                }
+                for progress in ReadingProgress.objects.filter(
+                    user=self.request.user,
+                    completed=False,
+                ).select_related('chapter__manga').order_by('-updated_at')[:4]
+            ]
+        else:
+            context['continue_reading'] = []
         return context
 
 
@@ -68,51 +105,68 @@ class SearchPageView(View):
         return render(request, 'core/search.html')
 
 
-class LibraryPageView(TemplateView):
+class AboutPageView(TemplateView):
+    template_name = 'core/about.html'
+
+
+class PrivacyPolicyPageView(TemplateView):
+    template_name = 'core/privacy_policy.html'
+
+
+class TermsOfServicePageView(TemplateView):
+    template_name = 'core/terms_of_service.html'
+
+
+class ContentPolicyPageView(TemplateView):
+    template_name = 'core/content_policy.html'
+
+
+class LibraryPageView(LoginRequiredMixin, TemplateView):
     template_name = 'core/library.html'
 
 
-class MangaDetailPageView(DetailView):
+class MangaDetailPageView(LoginRequiredMixin, DetailView):
     model = Manga
     template_name = 'core/manga_detail.html'
     context_object_name = 'manga'
 
+    def get_queryset(self):
+        return Manga.objects.filter(owner=self.request.user)
 
-class ReaderPageView(View):
+
+class ReaderPageView(LoginRequiredMixin, View):
     def get(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
+        chapter = get_object_or_404(Chapter, id=chapter_id, manga__owner=request.user)
         return render(request, 'core/reader.html', {
             'chapter': chapter,
             'manga': chapter.manga,
         })
 
 
-class DownloadChapterFileView(View):
+class DownloadChapterFileView(LoginRequiredMixin, View):
     """Create or reuse a chapter CBZ and stream it to the browser."""
 
     def get(self, request, chapter_id):
-        chapter = get_object_or_404(Chapter, id=chapter_id)
+        chapter = get_object_or_404(Chapter, id=chapter_id, manga__owner=request.user)
         try:
-            if chapter.file_path and Path(chapter.file_path).is_file():
-                return FileResponse(
-                    open(chapter.file_path, 'rb'),
-                    as_attachment=True,
-                    filename=Path(chapter.file_path).name,
-                )
             file_path = download_chapter(chapter)
+        except ValueError as exc:
+            logger.warning("Chapter %s is not downloadable: %s", chapter_id, exc)
+            return HttpResponse(f'Download unavailable: {exc}', status=422,
+                                content_type='text/plain; charset=utf-8')
         except Exception as exc:
             logger.error("Download failed for chapter %s: %s", chapter_id, exc)
-            return HttpResponse(f'Download failed: {exc}', status=500,
-                                content_type='text/plain')
+            return HttpResponse(f'Download failed: {exc}', status=502,
+                                content_type='text/plain; charset=utf-8')
 
         return FileResponse(open(file_path, 'rb'), as_attachment=True, filename=file_path.name)
 
 
-class DownloadVolumeFileView(View):
+class DownloadVolumeFileView(LoginRequiredMixin, View):
     """Create or reuse a volume CBZ and stream it to the browser."""
 
     def get(self, request, volume_id):
-        volume = get_object_or_404(Volume, id=volume_id)
+        volume = get_object_or_404(Volume, id=volume_id, manga__owner=request.user)
         manga = volume.manga
         chapters = volume.chapters.all().order_by('chapter_number')
 
@@ -121,10 +175,7 @@ class DownloadVolumeFileView(View):
                                 content_type='text/plain')
 
         try:
-            if volume.file_path and Path(volume.file_path).is_file():
-                file_path = Path(volume.file_path)
-            else:
-                file_path = download_volume(volume)
+            file_path = download_volume(volume)
         except Exception as exc:
             logger.error("Download failed for volume %s: %s", volume_id, exc)
             return HttpResponse(f'Download failed: {exc}', status=500,

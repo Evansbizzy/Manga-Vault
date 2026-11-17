@@ -3,8 +3,8 @@ from .models import Manga, Chapter, Volume, DownloadTask
 
 @admin.register(Manga)
 class MangaAdmin(admin.ModelAdmin):
-    list_display = ['title', 'author', 'source', 'content_type', 'created_at']
-    list_filter = ['source', 'content_type', 'status']
+    list_display = ['title', 'owner', 'author', 'source', 'content_type', 'created_at']
+    list_filter = ['owner', 'source', 'content_type', 'status']
     search_fields = ['title', 'author']
     readonly_fields = ['created_at', 'updated_at']
 

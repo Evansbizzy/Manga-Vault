@@ -81,7 +81,7 @@ class UniversalHtmlScraper(BaseScraper):
             chapters = self._extract_chapter_links_from_jsonld(jsonld, url)
         if not chapters:
             chapters = self._extract_chapter_links_from_page_links(soup, url)
-        if not chapters and self._page_looks_like_chapter(soup):
+        if not chapters and self._page_looks_like_chapter(soup, url):
             chapters = [ChapterData(number="1", title=title, volume=None, source_url=url)]
 
         content_type = self._infer_content_type(soup, jsonld)
@@ -283,9 +283,10 @@ class UniversalHtmlScraper(BaseScraper):
                 return self._normalize_url(urljoin(base_url, unescape(match.group(1))))
         return None
 
-    def _page_looks_like_chapter(self, soup: BeautifulSoup) -> bool:
-        text = soup.get_text(" ", strip=True).lower()
-        return "chapter" in text and bool(soup.find_all("img"))
+    def _page_looks_like_chapter(self, soup: BeautifulSoup, base_url: str) -> bool:
+        # A URL containing "chapter" is not enough: create a one-chapter import
+        # only when the page contains actual reader images in a reader container.
+        return bool(self._extract_images(soup, base_url))
 
     def _infer_content_type(self, soup: BeautifulSoup, jsonld: List[dict]) -> str:
         text = soup.get_text(" ", strip=True).lower()
@@ -297,12 +298,17 @@ class UniversalHtmlScraper(BaseScraper):
             return "manhwa"
         return "manga"
 
-    def _pick_text(self, soup: BeautifulSoup, selectors: List[str], default: str = "") -> str:
+    def _pick_text(self, soup: BeautifulSoup, selectors: List[str | tuple[str, str]], default: str = "") -> str:
         for selector in selectors:
+            attribute = None
+            if isinstance(selector, tuple):
+                selector, attribute = selector
             node = soup.select_one(selector)
             if not node:
                 continue
-            if node.name == "meta":
+            if attribute:
+                value = node.get(attribute)
+            elif node.name == "meta":
                 value = node.get("content")
             elif node.name == "title":
                 value = node.get_text(" ", strip=True)

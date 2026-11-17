@@ -8,31 +8,31 @@
     <meta name="description" content="{% block meta_description %}Search, read, and organize manga, manhwa, and manhua in your personal MangaVault.{% endblock %}">
     {% if SITE_URL %}<link rel="canonical" href="{{ SITE_URL }}{{ request.path }}">{% endif %}
     <meta name="robots" content="{% block robots %}index,follow{% endblock %}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <meta name="theme-color" content="#101410">
+    <link rel="icon" type="image/svg+xml" href="{% static 'core/brand-mark.svg' %}">
     <script defer src="https://unpkg.com/lucide@latest" onerror="window.lucide={createIcons:function(){}}"></script>
     <style>
         /* Reset & Tokens */
         *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
         :root {
-            --bg-primary: #0d1117;
-            --bg-secondary: #161b22;
-            --bg-card: #1c2333;
-            --border: #30363d;
-            --text-primary: #e6edf3;
-            --text-secondary: #8b949e;
-            --text-muted: #6e7681;
-            --accent: #f85149;
-            --accent-hover: #da3633;
-            --accent-secondary: #58a6ff;
-            --success: #3fb950;
-            --warning: #d29922;
-            --radius: 12px;
-            --radius-sm: 8px;
-            --shadow: 0 2px 12px rgba(0,0,0,.4);
+            --bg-primary: #101410;
+            --bg-secondary: #171c17;
+            --bg-card: #1d241e;
+            --border: #303a30;
+            --text-primary: #eef1e8;
+            --text-secondary: #a6b09f;
+            --text-muted: #788374;
+            --accent: #df875f;
+            --accent-hover: #c66c46;
+            --accent-secondary: #c3d0a6;
+            --success: #8fb58a;
+            --warning: #d4ad6c;
+            --radius: 14px;
+            --radius-sm: 9px;
+            --shadow: 0 18px 50px rgba(0,0,0,.28);
         }
         html {
-            font-family: 'Inter', system-ui, sans-serif;
+            font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
             background: var(--bg-primary);
             color: var(--text-primary);
             line-height: 1.6;
@@ -40,30 +40,33 @@
         a { color: var(--accent-secondary); text-decoration: none; }
         a:hover { text-decoration: underline; }
         img { max-width: 100%; display: block; }
+        :focus-visible { outline: 2px solid var(--accent-secondary); outline-offset: 3px; }
+        h1, h2 { text-wrap: balance; }
 
         /* Navbar */
         .navbar {
             display: flex; align-items: center; gap: 1.5rem;
-            padding: .75rem 1.5rem;
-            background: var(--bg-secondary);
+            padding: .72rem max(1.5rem, calc((100vw - 1360px) / 2));
+            background: rgba(23,28,23,.94);
             border-bottom: 1px solid var(--border);
             position: sticky; top: 0; z-index: 100;
-            backdrop-filter: blur(12px);
+            backdrop-filter: blur(16px);
         }
         .navbar .brand {
-            font-weight: 800; font-size: 1.15rem; color: var(--accent);
-            display: flex; align-items: center; gap: .4rem;
+            font-weight: 800; font-size: 1.05rem; letter-spacing: -.035em; color: var(--text-primary);
+            display: flex; align-items: center; gap: .65rem; margin-right: auto;
         }
-        .navbar .brand i { width: 22px; height: 22px; }
+        .navbar .brand img { width: 34px; height: 34px; }
         .navbar a.nav-link {
             color: var(--text-secondary); font-size: .875rem; font-weight: 500;
-            transition: color .2s; display: flex; align-items: center; gap: .35rem;
+            transition: color .2s; display: flex; align-items: center; gap: .4rem;
+            padding: .5rem .7rem; border-radius: 8px;
         }
-        .navbar a.nav-link:hover { color: var(--text-primary); text-decoration: none; }
+        .navbar a.nav-link:hover, .navbar a.nav-link.active { color: var(--text-primary); background: rgba(223,135,95,.1); text-decoration: none; }
         .navbar a.nav-link i { width: 16px; height: 16px; }
 
         /* Container */
-        .container { max-width: 1280px; margin: 0 auto; padding: 1.5rem; }
+        .container { max-width: 1360px; min-height: calc(100vh - 150px); margin: 0 auto; padding: 1.7rem 1.5rem 3.5rem; }
         .breadcrumbs { margin: 0 0 1rem; color: var(--text-muted); font-size: .8rem; }
         .breadcrumbs ol { display: flex; flex-wrap: wrap; gap: .45rem; list-style: none; }
         .breadcrumbs li + li::before { content: '/'; margin-right: .45rem; color: var(--text-muted); }
@@ -97,7 +100,7 @@
             font-size: .7rem; font-weight: 600; padding: .15rem .5rem;
             border-radius: 999px; text-transform: uppercase; letter-spacing: .3px;
         }
-        .badge-accent { background: rgba(248,81,73,.15); color: var(--accent); }
+        .badge-accent { background: rgba(223,135,95,.15); color: var(--accent); }
         .badge-blue { background: rgba(88,166,255,.15); color: var(--accent-secondary); }
         .badge-muted { background: rgba(110,118,129,.2); color: var(--text-secondary); }
         .badge-success { background: rgba(63,185,80,.15); color: var(--success); }
@@ -128,6 +131,7 @@
             outline: none; transition: border-color .2s;
         }
         .input:focus, .select-styled:focus { border-color: var(--accent); }
+        .input::placeholder { color: var(--text-muted); opacity: 1; }
 
         /* Progress Bar */
         .progress-bar { height: 6px; background: var(--bg-card); border-radius: 3px; overflow: hidden; width: 100%; }
@@ -169,7 +173,9 @@
         @media (max-width: 768px) {
             .grid { grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); }
             .container { padding: 1rem; }
-            .navbar { gap: .75rem; padding: .6rem 1rem; }
+            .navbar { gap: .35rem; padding: .55rem .8rem; flex-wrap: wrap; }
+            .navbar .brand { margin-right: auto; }
+            .navbar a.nav-link { padding: .45rem .55rem; font-size: .8rem; }
         }
         @media (max-width: 480px) {
             .grid { grid-template-columns: repeat(2, 1fr); gap: .6rem; }
@@ -179,12 +185,12 @@
 </head>
 <body>
 
-<nav class="navbar">
-    <a href="/" class="brand"><i data-lucide="book-open"></i> MangaVault</a>
-    <a href="/" class="nav-link"><i data-lucide="home"></i> Home</a>
-    <a href="/search/" class="nav-link"><i data-lucide="search"></i> Search</a>
-    <a href="/library/" class="nav-link"><i data-lucide="library"></i> Library</a>
-    {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}" style="margin-left:auto">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit">Sign out</button></form>{% endif %}
+<nav class="navbar" aria-label="Main navigation">
+    <a href="{% url 'index' %}" class="brand"><img src="{% static 'core/brand-mark.svg' %}" alt=""><span>MangaVault</span></a>
+    <a href="{% url 'index' %}" class="nav-link{% if request.path == '/' %} active{% endif %}"{% if request.path == '/' %} aria-current="page"{% endif %}><i data-lucide="home"></i> Home</a>
+    <a href="{% url 'search' %}" class="nav-link{% if request.path == '/search/' %} active{% endif %}"{% if request.path == '/search/' %} aria-current="page"{% endif %}><i data-lucide="search"></i> Discover</a>
+    <a href="{% url 'library' %}" class="nav-link{% if request.path == '/library/' %} active{% endif %}"{% if request.path == '/library/' %} aria-current="page"{% endif %}><i data-lucide="library"></i> Library</a>
+    {% if user.is_authenticated %}<form method="post" action="{% url 'logout' %}">{% csrf_token %}<button class="btn btn-ghost btn-sm" type="submit">Sign out</button></form>{% else %}<a class="btn btn-ghost btn-sm" href="{% url 'login' %}">Sign in</a>{% endif %}
 </nav>
 
 <div id="toast-container"></div>
@@ -193,6 +199,41 @@
     {% block breadcrumbs %}{% endblock %}
     {% block content %}{% endblock %}
 </div>
+
+<footer class="site-footer">
+    <a href="{% url 'index' %}" class="footer-brand"><img src="{% static 'core/brand-mark.svg' %}" alt=""><span>MangaVault</span></a>
+    <p>Keep your reading shelf close.</p>
+    <nav aria-label="Information and policies">
+        <a href="{% url 'about' %}">About</a>
+        <a href="{% url 'privacy_policy' %}">Privacy</a>
+        <a href="{% url 'terms_of_service' %}">Terms</a>
+        <a href="{% url 'content_policy' %}">Content policy</a>
+    </nav>
+</footer>
+
+<style>
+.site-footer { max-width: 1360px; margin: 0 auto; padding: 1.3rem 1.5rem 2rem; border-top: 1px solid var(--border); display: flex; align-items: center; gap: 1.2rem; color: var(--text-muted); font-size: .78rem; }
+.footer-brand { display: inline-flex; align-items: center; gap: .45rem; color: var(--text-primary); font-weight: 750; }
+.footer-brand img { width: 27px; height: 27px; }
+.site-footer p { margin-right: auto; }
+.site-footer nav { display: flex; flex-wrap: wrap; gap: 1rem; }
+.site-footer nav a { color: var(--text-secondary); }
+.editorial-page { max-width: 890px; margin: 0 auto; }
+.editorial-hero { padding: clamp(2rem, 7vw, 5.5rem) 0 3rem; border-bottom: 1px solid var(--border); }
+.editorial-hero .eyebrow { color: var(--accent); font-size: .72rem; font-weight: 750; letter-spacing: .13em; text-transform: uppercase; }
+.editorial-hero h1 { margin: .9rem 0 1rem; max-width: 15ch; font-family: Georgia, "Times New Roman", serif; font-size: clamp(2.7rem, 7vw, 5rem); font-weight: 500; letter-spacing: -.055em; line-height: 1.02; }
+.editorial-hero p { max-width: 62ch; color: var(--text-secondary); font-size: 1.05rem; line-height: 1.75; }
+.editorial-section { padding: 1.8rem 0; border-bottom: 1px solid var(--border); }
+.editorial-section h2 { margin-bottom: .8rem; font-family: Georgia, "Times New Roman", serif; font-size: 1.55rem; font-weight: 500; }
+.editorial-section p, .editorial-section li { max-width: 72ch; color: var(--text-secondary); font-size: .95rem; line-height: 1.8; }
+.editorial-section p + p { margin-top: .8rem; }
+.editorial-section ul { padding-left: 1.2rem; }
+.editorial-section li + li { margin-top: .4rem; }
+.policy-links { display: flex; flex-wrap: wrap; gap: 1.3rem; padding: 1.5rem 0; }
+.policy-note { padding: 1.4rem 0; color: var(--text-muted); font-size: .8rem; line-height: 1.6; }
+@media (max-width: 720px) { .site-footer { align-items: flex-start; flex-direction: column; gap: .55rem; padding: 1.2rem 1rem 1.5rem; } .site-footer p { margin: 0; } .site-footer nav { gap: .9rem; } }
+@media (prefers-reduced-motion: reduce) { *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; } }
+</style>
 
 <script>
 /* Toast System */

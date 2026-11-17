@@ -17,6 +17,20 @@ def chapter_sort_key(value: str):
     return (1, text.lower())
 
 class Manga(models.Model):
+    LIBRARY_STATUS_CHOICES = [
+        ('unread', 'Unread'),
+        ('reading', 'Reading'),
+        ('completed', 'Completed'),
+        ('paused', 'Paused'),
+        ('dropped', 'Dropped'),
+    ]
+    owner = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.CASCADE,
+        related_name='manga_library',
+        null=True,
+        blank=True,
+    )
     title = models.CharField(max_length=500)
     alt_titles = models.JSONField(default=list, blank=True)
     author = models.CharField(max_length=200, blank=True)
@@ -28,6 +42,8 @@ class Manga(models.Model):
     source = models.CharField(max_length=100)  # mangadex, etc.
     source_id = models.CharField(max_length=1000)
     content_type = models.CharField(max_length=50, default='manga')  # manga, manhwa, webtoon
+    library_status = models.CharField(max_length=20, choices=LIBRARY_STATUS_CHOICES, default='unread')
+    tags = models.JSONField(default=list, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -35,7 +51,10 @@ class Manga(models.Model):
         verbose_name_plural = "Manga"
         ordering = ['-created_at']
         constraints = [
-            models.UniqueConstraint(fields=['source', 'source_id'], name='unique_manga_source_id')
+            models.UniqueConstraint(
+                fields=['owner', 'source', 'source_id'],
+                name='unique_owner_manga_source_id',
+            )
         ]
     
     def __str__(self):

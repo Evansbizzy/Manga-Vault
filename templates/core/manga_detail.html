@@ -428,8 +428,9 @@ function pollDownloadTask(taskId, total) {
                 statusEl.replaceWith(link);
             });
 
-            document.getElementById('modal-title').textContent =
-                task.status === 'failed' ? 'Download failed' : 'Downloads ready';
+            document.getElementById('modal-title').textContent = task.status === 'failed'
+                ? 'Download failed'
+                : (files.length < total ? 'Downloads completed with failures' : 'Downloads ready');
             document.getElementById('modal-progress-fill').style.width = '100%';
             document.getElementById('btn-dl-all').classList.toggle('ready', files.length > 0);
             if (files.length < total) showToast(task.message || 'Some chapters could not be downloaded', 'warning');

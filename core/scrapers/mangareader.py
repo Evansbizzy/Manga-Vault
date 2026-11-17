@@ -24,7 +24,7 @@ class MangaReaderScraper(UniversalHtmlScraper):
 
     def search(self, query: str) -> List[MangaData]:
         response = self.get(
-            f"{self.base_url}/search?keyword={quote_plus(query)}", timeout=15
+            f"{self.base_url}/search?keyword={quote_plus(query)}", timeout=(4, 10)
         )
         soup = BeautifulSoup(response.text, "html.parser")
         results = []

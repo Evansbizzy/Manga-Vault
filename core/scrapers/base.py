@@ -1,11 +1,18 @@
 import requests
 import time
+import logging
 from abc import ABC, abstractmethod
 from typing import List, Dict, Optional
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
-from core.utils.network import safe_get
+from core.utils.network import safe_request, safe_get
+
+logger = logging.getLogger(__name__)
+
+
+class ChapterImageDownloadError(ValueError):
+    """One or more required page images could not be retrieved safely."""
 
 
 @dataclass
@@ -30,6 +37,7 @@ class MangaData:
     source_id: str
     content_type: str
     chapters: List[ChapterData]
+    external_url: str = ""
 
 
 class BaseScraper(ABC):
@@ -63,23 +71,35 @@ class BaseScraper(ABC):
         self.last_request_time = time.time()
 
     def get(self, url: str, **kwargs):
+        return self.request("GET", url, **kwargs)
+
+    def post(self, url: str, **kwargs):
+        return self.request("POST", url, **kwargs)
+
+    def request(self, method: str, url: str, **kwargs):
         kwargs.setdefault("timeout", 30)
         for attempt in range(self.max_retries):
             self._rate_limit()
             try:
-                resp = safe_get(self.session, url, **kwargs)
+                resp = safe_request(self.session, method, url, **kwargs)
                 resp.raise_for_status()
                 return resp
-            except requests.exceptions.HTTPError as e:
+            except requests.exceptions.HTTPError:
                 if resp.status_code == 429:
-                    wait = min(2 ** attempt * 2, 30)
+                    retry_after = resp.headers.get("Retry-After", "")
+                    try:
+                        wait = min(max(float(retry_after), 0), 60)
+                    except ValueError:
+                        wait = min(2 ** attempt * 2, 30)
+                    if attempt == self.max_retries - 1:
+                        raise
                     time.sleep(wait)
                     continue
                 if resp.status_code >= 500 and attempt < self.max_retries - 1:
                     time.sleep(2 ** attempt)
                     continue
                 raise
-            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout) as e:
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout):
                 if attempt < self.max_retries - 1:
                     time.sleep(2 ** attempt)
                     continue
@@ -120,15 +140,23 @@ class BaseScraper(ABC):
         if not page_urls:
             return []
 
+        return self.download_chapter_images_from_urls(page_urls)
+
+    def download_chapter_images_from_urls(self, page_urls: List[str]) -> List[bytes]:
+        """Fetch a previously extracted page list without re-parsing the source."""
+        if not page_urls:
+            return []
+
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         images = [None] * len(page_urls)
+        failed = []
 
         def download_single(args):
             idx, url = args
             for attempt in range(self.max_retries):
+                session = requests.Session()
                 try:
-                    session = requests.Session()
                     headers = self.get_headers()
                     headers["Referer"] = self.image_referer(url)
                     headers["Accept"] = "image/avif,image/webp,image/png,image/jpeg,*/*"
@@ -137,7 +165,9 @@ class BaseScraper(ABC):
                     with resp:
                         resp.raise_for_status()
                         content_type = resp.headers.get('content-type', '').split(';', 1)[0].lower()
-                        if content_type not in self.image_content_types:
+                        if content_type not in self.image_content_types and content_type not in {
+                            "application/octet-stream", "binary/octet-stream", ""
+                        }:
                             return idx, None
                         content_length = resp.headers.get('content-length')
                         if content_length and int(content_length) > 20 * 1024 * 1024:
@@ -147,15 +177,18 @@ class BaseScraper(ABC):
                             image_data.extend(chunk)
                             if len(image_data) > 20 * 1024 * 1024:
                                 return idx, None
-                        return idx, bytes(image_data) if image_data else None
+                        image_bytes = bytes(image_data)
+                        return idx, image_bytes if self._is_supported_image(image_bytes) else None
                 except Exception as e:
                     if attempt < self.max_retries - 1:
                         time.sleep(1 * (attempt + 1))
                         continue
-                    print(f"Failed to download {url}: {e}")
+                    logger.warning("Page image request failed (page %s): %s", idx + 1, e)
+                finally:
+                    session.close()
             return idx, None
 
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        with ThreadPoolExecutor(max_workers=min(4, len(page_urls))) as executor:
             futures = {
                 executor.submit(download_single, (i, url)): i
                 for i, url in enumerate(page_urls)
@@ -164,5 +197,32 @@ class BaseScraper(ABC):
                 idx, data = future.result()
                 if data:
                     images[idx] = data
+                else:
+                    failed.append(idx + 1)
+
+        if failed:
+            first_failed = ", ".join(str(page) for page in sorted(failed)[:10])
+            remaining = len(failed) - 10
+            suffix = f" and {remaining} more" if remaining > 0 else ""
+            page_label = "page" if len(failed) == 1 else "pages"
+            raise ChapterImageDownloadError(
+                f"{self.label if hasattr(self, 'label') else self.name} could not retrieve "
+                f"{page_label} {first_failed}{suffix} "
+                f"({len(failed)} of {len(page_urls)} pages failed). No incomplete archive was created."
+            )
 
         return [img for img in images if img is not None]
+
+    @staticmethod
+    def _is_supported_image(image_data: bytes) -> bool:
+        """Accept known image signatures, not error HTML mislabeled as an image."""
+        return bool(
+            image_data.startswith(b"\xff\xd8\xff")
+            or image_data.startswith(b"\x89PNG\r\n\x1a\n")
+            or image_data.startswith((b"GIF87a", b"GIF89a"))
+            or image_data.startswith(b"BM")
+            or (image_data.startswith(b"RIFF") and image_data[8:12] == b"WEBP")
+            or (image_data[4:8] == b"ftyp" and any(
+                brand in image_data[8:32] for brand in (b"avif", b"avis")
+            ))
+        )

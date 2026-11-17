@@ -28,30 +28,34 @@
 .result-count { color: var(--text-muted); font-size: .8rem; }
 .source-report { display: flex; flex-wrap: wrap; gap: .45rem; margin-bottom: 1.2rem; }
 .source-chip { color: var(--text-secondary); border: 1px solid var(--border); border-radius: 999px; padding: .28rem .65rem; font-size: .7rem; }
-.source-chip.failed { color: #ff9b93; border-color: rgba(248,81,73,.45); }
+.source-chip.failed { color: #efa184; border-color: rgba(223,135,95,.45); }
+.source-chip.pending { color: var(--text-muted); opacity: .75; }
 .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
-.result-card { min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: inherit; text-align: left; padding: 0; cursor: pointer; transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; animation: card-in .34s both; animation-delay: calc(var(--card-index, 0) * 24ms); }
-.result-card:hover { transform: translateY(-4px); border-color: rgba(248,81,73,.55); box-shadow: 0 16px 34px rgba(0,0,0,.24); }
+.load-more-wrap { display: flex; justify-content: center; padding: 1.5rem 0 2rem; }
+.result-card { display: block; min-width: 0; overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); color: inherit; text-align: left; text-decoration: none; padding: 0; cursor: pointer; transition: transform .22s ease, border-color .22s ease, box-shadow .22s ease; animation: card-in .34s both; animation-delay: calc(var(--card-index, 0) * 24ms); }
+.result-card:hover { transform: translateY(-4px); border-color: rgba(223,135,95,.55); box-shadow: 0 16px 34px rgba(0,0,0,.24); }
 .result-card:active { transform: translateY(-1px) scale(.99); }
 .result-card:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
-.result-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #202631; }
-.cover-fallback { display: grid; place-items: center; width: 100%; aspect-ratio: 2 / 3; padding: 1rem; background: linear-gradient(145deg, #242d39, #171c25); color: var(--text-muted); text-align: center; font-size: .8rem; }
+.result-cover { width: 100%; aspect-ratio: 2 / 3; object-fit: cover; background: #202820; }
+.cover-fallback { display: grid; place-items: center; width: 100%; aspect-ratio: 2 / 3; padding: 1rem; background: linear-gradient(145deg, #283328, #171c17); color: var(--text-muted); text-align: center; font-size: .8rem; }
 .result-info { padding: .75rem; }
 .result-info h3 { min-height: 2.5em; color: var(--text-primary); font-size: .87rem; line-height: 1.3; font-weight: 700; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .result-author { overflow: hidden; margin-top: .3rem; color: var(--text-muted); font-size: .73rem; text-overflow: ellipsis; white-space: nowrap; }
 .result-meta { display: flex; justify-content: space-between; align-items: center; gap: .4rem; margin-top: .75rem; }
 .result-source { color: var(--text-secondary); font-size: .65rem; text-transform: uppercase; letter-spacing: .06em; }
 .result-type { color: var(--accent); font-size: .64rem; font-weight: 700; text-transform: uppercase; }
+.result-capability { display: inline-flex; align-items: center; gap: .25rem; margin-top: .55rem; padding: .2rem .45rem; border-radius: 999px; background: rgba(143,181,138,.1); color: var(--success); font-size: .65rem; font-weight: 650; }
+.result-capability.catalog { background: rgba(110,118,129,.16); color: var(--text-secondary); }
 .search-state { padding: 3.5rem 1rem; color: var(--text-secondary); text-align: center; }
 .search-state h3 { color: var(--text-primary); font-size: 1rem; margin-bottom: .35rem; }
 .search-state p { font-size: .85rem; }
 .search-state[hidden], .results-grid[hidden], .source-report[hidden], .section-bar[hidden] { display: none; }
 .skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 1rem; }
 .skeleton-card { overflow: hidden; border: 1px solid var(--border); border-radius: 12px; background: var(--bg-card); }
-.skeleton-cover { aspect-ratio: 2 / 3; background: linear-gradient(100deg, #202631 25%, #2a3340 42%, #202631 60%); background-size: 220% 100%; animation: shimmer 1.3s linear infinite; }
-.skeleton-line { height: 10px; margin: .8rem .7rem; border-radius: 6px; background: #2a3340; }
+.skeleton-cover { aspect-ratio: 2 / 3; background: linear-gradient(100deg, #202820 25%, #303a30 42%, #202820 60%); background-size: 220% 100%; animation: shimmer 1.3s linear infinite; }
+.skeleton-line { height: 10px; margin: .8rem .7rem; border-radius: 6px; background: #303a30; }
 .skeleton-line.short { width: 55%; margin-top: .55rem; }
-.url-error { min-height: 1.2rem; margin-top: .35rem; color: #ff9b93; font-size: .78rem; }
+.url-error { min-height: 1.2rem; margin-top: .35rem; color: #efa184; font-size: .78rem; }
 @keyframes shimmer { to { background-position-x: -220%; } }
 @keyframes card-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
 @media (max-width: 760px) {
@@ -126,6 +130,9 @@
         <div class="skeleton-card"><div class="skeleton-cover"></div><div class="skeleton-line"></div><div class="skeleton-line short"></div></div>
     </div>
     <div class="results-grid" id="results" hidden></div>
+    <div class="load-more-wrap" id="load-more-wrap" hidden>
+        <button class="btn btn-secondary" type="button" id="load-more-results">Show more results</button>
+    </div>
     <div class="search-state" id="search-state" role="status" aria-live="polite">
         <h3>Search across your sources</h3>
         <p>Enter a title above to see matching series.</p>
@@ -137,6 +144,12 @@
 <script>
 var activeSearch = null;
 var sourceLabels = {};
+var searchSources = [];
+var streamSourceStates = {};
+var streamResultItems = [];
+var pendingResults = [];
+var renderedResultCount = 0;
+var resultBatchSize = 24;
 
 fetch('/api/sources/')
     .then(function(response) {
@@ -148,7 +161,10 @@ fetch('/api/sources/')
         var importSelect = document.getElementById('importSource');
         (data.sources || []).forEach(function(source) {
             sourceLabels[source.name] = source.label;
-            if (source.supports_search) searchSelect.add(new Option(source.label, source.name));
+            if (source.supports_search) {
+                searchSources.push(source);
+                searchSelect.add(new Option(source.label, source.name));
+            }
             if (source.supports_url_import) importSelect.add(new Option(source.label, source.name));
         });
     })
@@ -165,6 +181,8 @@ document.getElementById('importForm').addEventListener('submit', function(event)
     event.preventDefault();
     doImport();
 });
+
+document.getElementById('load-more-results').addEventListener('click', appendResultBatch);
 
 function setSearchState(title, description) {
     var state = document.getElementById('search-state');
@@ -184,16 +202,29 @@ function doSearch() {
         document.getElementById('searchInput').focus();
         return;
     }
+    if (query.replace(/[^\p{L}\p{N}]/gu, '').length < 2) {
+        setSearchState('Search needs more detail', 'Enter at least two letters or numbers to get useful matches.');
+        document.getElementById('searchInput').focus();
+        return;
+    }
 
     if (activeSearch) activeSearch.abort();
     activeSearch = new AbortController();
     document.getElementById('results').replaceChildren();
     document.getElementById('results').hidden = true;
+    document.getElementById('load-more-wrap').hidden = true;
+    pendingResults = [];
+    renderedResultCount = 0;
     document.getElementById('source-report').replaceChildren();
     document.getElementById('source-report').hidden = true;
     document.getElementById('results-heading').hidden = true;
     document.getElementById('search-state').hidden = true;
     document.getElementById('loading').hidden = false;
+
+    if (source === 'all') {
+        streamSearch(query, activeSearch.signal);
+        return;
+    }
 
     fetch('/api/search/?q=' + encodeURIComponent(query) + '&source=' + encodeURIComponent(source), {
         signal: activeSearch.signal
@@ -216,17 +247,118 @@ function doSearch() {
         });
 }
 
+async function streamSearch(query, signal) {
+    streamSourceStates = {};
+    streamResultItems = [];
+    searchSources.forEach(function(source) {
+        streamSourceStates[source.name] = {
+            source: source.name,
+            label: source.label,
+            status: 'pending',
+            count: 0
+        };
+    });
+    renderSourceReport(Object.values(streamSourceStates));
+
+    try {
+        var response = await fetch('/api/search/stream/?q=' + encodeURIComponent(query), { signal: signal });
+        if (!response.ok) {
+            var errorData = await response.json();
+            throw new Error(errorData.error || 'Search could not be completed');
+        }
+        if (!response.body || !response.body.getReader) {
+            throw new Error('This browser cannot display progressive search results');
+        }
+
+        var reader = response.body.getReader();
+        var decoder = new TextDecoder();
+        var buffer = '';
+        var finished = false;
+        while (!finished) {
+            var chunk = await reader.read();
+            buffer += decoder.decode(chunk.value || new Uint8Array(), { stream: !chunk.done });
+            var lines = buffer.split('\n');
+            buffer = lines.pop();
+            lines.forEach(function(line) {
+                if (!line.trim()) return;
+                var event = JSON.parse(line);
+                if (event.done) {
+                    finished = true;
+                    return;
+                }
+                var state = event.source_status;
+                if (state) streamSourceStates[state.source] = state;
+                var addedItems = [];
+                (event.results || []).forEach(function(item) {
+                    var identity = item.source + ':' + item.source_id;
+                    if (!streamResultItems.some(function(existing) {
+                        return existing.source + ':' + existing.source_id === identity;
+                    })) {
+                        streamResultItems.push(item);
+                        addedItems.push(item);
+                    }
+                });
+                renderSourceReport(Object.values(streamSourceStates));
+                if (addedItems.length) renderStreamResults(addedItems, query);
+            });
+            if (chunk.done) finished = true;
+        }
+
+        document.getElementById('loading').hidden = true;
+        renderSourceReport(Object.values(streamSourceStates));
+        if (!streamResultItems.length) renderResults([], query);
+    } catch (error) {
+        if (error.name === 'AbortError') return;
+        document.getElementById('loading').hidden = true;
+        setSearchState('Search could not finish', error.message || 'Check your connection and try again.');
+    }
+}
+
+function renderStreamResults(items, query) {
+    var queryKey = normalizeSearchTitle(query);
+    var ordered = items.slice().sort(function(a, b) {
+        return clientRelevance(b, queryKey) - clientRelevance(a, queryKey);
+    });
+    document.getElementById('loading').hidden = true;
+    var previousTotal = pendingResults.length;
+    pendingResults = pendingResults.concat(ordered);
+    document.getElementById('results-heading').hidden = false;
+    document.getElementById('result-count').textContent = pendingResults.length
+        + (pendingResults.length === 1 ? ' result' : ' results');
+    document.getElementById('results').hidden = false;
+    if (renderedResultCount >= previousTotal) appendResultBatch();
+    else document.getElementById('load-more-wrap').hidden = renderedResultCount >= pendingResults.length;
+}
+
+function normalizeSearchTitle(value) {
+    return String(value || '').normalize('NFKD').replace(/[\u0300-\u036f]/g, '')
+        .toLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim();
+}
+
+function clientRelevance(item, query) {
+    var title = normalizeSearchTitle(item.title);
+    if (title === query) return 3;
+    if (title.startsWith(query)) return 2;
+    var terms = query.split(' ').filter(Boolean);
+    return terms.length ? terms.filter(function(term) { return title.includes(term); }).length / terms.length : 0;
+}
+
 function renderSourceReport(sources) {
     var report = document.getElementById('source-report');
     report.replaceChildren();
     if (!sources.length) return;
     sources.forEach(function(source) {
         var chip = document.createElement('span');
-        chip.className = 'source-chip' + (source.status === 'error' ? ' failed' : '');
-        chip.textContent = source.status === 'error'
-            ? source.label + ': unavailable'
-            : source.label + ': ' + source.count;
-        if (source.message) chip.title = source.message;
+        chip.className = 'source-chip' + (source.status === 'error' ? ' failed' : '')
+            + (source.status === 'pending' ? ' pending' : '');
+        chip.textContent = source.status === 'pending'
+            ? source.label + ': searching…'
+            : (source.status === 'error'
+                ? source.label + ': unavailable'
+                : source.label + ': ' + source.count + (source.cached ? ' · cached' : '')
+                    + (source.duration_ms !== undefined ? ' · ' + source.duration_ms + ' ms' : ''));
+        if (source.cached) chip.title = 'Recent results served from cache';
+        else if (source.message) chip.title = source.message;
         report.appendChild(chip);
     });
     report.hidden = false;
@@ -250,13 +382,31 @@ function renderResults(items, query) {
 
     document.getElementById('results-heading').hidden = false;
     document.getElementById('result-count').textContent = items.length + (items.length === 1 ? ' result' : ' results');
-    items.forEach(function(item, index) {
-        var button = document.createElement('button');
-        button.type = 'button';
-        button.className = 'result-card';
-        button.style.setProperty('--card-index', index);
-        button.setAttribute('aria-label', 'Import ' + item.title + ' from ' + (sourceLabels[item.source] || item.source));
-        button.addEventListener('click', function() { importManga(item.source, item.source_id); });
+    pendingResults = items;
+    renderedResultCount = 0;
+    appendResultBatch();
+}
+
+function appendResultBatch() {
+    var results = document.getElementById('results');
+    var batch = pendingResults.slice(renderedResultCount, renderedResultCount + resultBatchSize);
+    batch.forEach(function(item, offset) {
+        var index = renderedResultCount + offset;
+        var card = item.supports_import === false ? document.createElement('a') : document.createElement('button');
+        if (item.supports_import === false) {
+            var externalUrl = safeHttpUrl(item.external_url);
+            if (!externalUrl) return;
+            card.href = externalUrl;
+            card.target = '_blank';
+            card.rel = 'noopener noreferrer';
+            card.setAttribute('aria-label', 'Open ' + item.title + ' on ' + (sourceLabels[item.source] || item.source));
+        } else {
+            card.type = 'button';
+            card.setAttribute('aria-label', 'Import ' + item.title + ' from ' + (sourceLabels[item.source] || item.source));
+            card.addEventListener('click', function() { importManga(item.source, item.source_id); });
+        }
+        card.className = 'result-card';
+        card.style.setProperty('--card-index', index);
 
         var coverUrl = safeHttpUrl(item.cover);
         if (coverUrl) {
@@ -271,12 +421,12 @@ function renderResults(items, query) {
                 fallback.textContent = 'Cover unavailable';
                 image.replaceWith(fallback);
             }, { once: true });
-            button.appendChild(image);
+            card.appendChild(image);
         } else {
             var placeholder = document.createElement('div');
             placeholder.className = 'cover-fallback';
             placeholder.textContent = 'Cover unavailable';
-            button.appendChild(placeholder);
+            card.appendChild(placeholder);
         }
 
         var info = document.createElement('div');
@@ -295,11 +445,18 @@ function renderResults(items, query) {
         source.className = 'result-source';
         source.textContent = sourceLabels[item.source] || item.source || 'Source';
         metadata.append(type, source);
-        info.append(title, author, metadata);
-        button.appendChild(info);
-        results.appendChild(button);
+        var capability = document.createElement('span');
+        capability.className = 'result-capability' + (item.supports_import === false ? ' catalog' : '');
+        capability.textContent = item.supports_import === false
+            ? 'Catalog link only'
+            : (item.supports_read === false ? 'Import details' : 'Import and read');
+        info.append(title, author, metadata, capability);
+        card.appendChild(info);
+        results.appendChild(card);
     });
+    renderedResultCount += batch.length;
     results.hidden = false;
+    document.getElementById('load-more-wrap').hidden = renderedResultCount >= pendingResults.length;
 }
 
 function safeHttpUrl(value) {

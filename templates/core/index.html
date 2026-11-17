@@ -12,8 +12,8 @@
     align-items: center; gap: 2rem; min-height: 390px; overflow: hidden;
     padding: clamp(2rem, 6vw, 4.5rem); margin: .5rem 0 3rem;
     border: 1px solid var(--border); border-radius: 24px;
-    background: radial-gradient(ellipse at 88% 52%, rgba(248,81,73,.14), transparent 42%),
-                linear-gradient(120deg, #111822 8%, #10141c 72%);
+    background: radial-gradient(ellipse at 88% 52%, rgba(223,135,95,.16), transparent 42%),
+                linear-gradient(120deg, #1a211b 8%, #111511 72%);
 }
 .hero-copy { position: relative; z-index: 1; }
 .eyebrow { display: inline-flex; align-items: center; gap: .55rem; color: var(--accent); font-size: .73rem; font-weight: 800; letter-spacing: .15em; text-transform: uppercase; }
@@ -32,12 +32,12 @@
 .stack-cover:nth-child(3) { transform: translateX(5%) rotate(12deg) translateY(12px); }
 .home-hero:hover .stack-cover:nth-child(1) { transform: translateX(-115%) rotate(-16deg) translateY(4px); }
 .home-hero:hover .stack-cover:nth-child(3) { transform: translateX(15%) rotate(16deg) translateY(4px); }
-.stack-empty { display: grid; place-items: center; width: 210px; height: 260px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; color: var(--accent); background: linear-gradient(145deg, #202b37, #151b24); box-shadow: 0 24px 55px rgba(0,0,0,.35); }
+.stack-empty { display: grid; place-items: center; width: 210px; height: 260px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px; color: var(--accent); background: linear-gradient(145deg, #293329, #171c17); box-shadow: 0 24px 55px rgba(0,0,0,.35); }
 .stack-empty i { width: 70px; height: 70px; opacity: .8; }
 .home-links { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; margin-bottom: 3.2rem; overflow: hidden; border: 1px solid var(--border); border-radius: 14px; background: var(--border); }
 .home-link { display: flex; gap: 1rem; align-items: flex-start; padding: 1.25rem; background: var(--bg-card); color: inherit; text-decoration: none; transition: background .18s ease; }
 .home-link:hover { background: var(--bg-secondary); }
-.home-link-icon { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: var(--accent); background: rgba(248,81,73,.1); }
+.home-link-icon { display: grid; flex: 0 0 40px; width: 40px; height: 40px; place-items: center; border-radius: 11px; color: var(--accent); background: rgba(223,135,95,.1); }
 .home-link-icon i { width: 19px; height: 19px; }
 .home-link strong { display: block; margin: .1rem 0 .3rem; font-size: .94rem; }
 .home-link p { margin: 0; color: var(--text-muted); font-size: .8rem; line-height: 1.5; }
@@ -49,11 +49,20 @@
 .section-heading a i { width: 15px; height: 15px; }
 .home .grid { grid-template-columns: repeat(auto-fill, minmax(155px, 1fr)); gap: 1rem; }
 .home .card { overflow: hidden; border-radius: 12px; transition: transform .2s ease, border-color .2s ease; }
-.home .card:hover { transform: translateY(-4px); border-color: rgba(248,81,73,.65); }
+.home .card:hover { transform: translateY(-4px); border-color: rgba(223,135,95,.65); }
 .home .card img { aspect-ratio: 2 / 2.8; }
 .home .card-body { padding: .85rem; }
 .home .card-body h3 { font-size: .88rem; }
 .home .empty-state { padding: 2.3rem 1rem; border: 1px dashed var(--border); border-radius: 14px; }
+.continue-reading { margin: 0 0 3rem; }
+.continue-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(235px, 1fr)); gap: .8rem; }
+.continue-card { display: grid; grid-template-columns: 68px minmax(0, 1fr); gap: .8rem; align-items: center; padding: .75rem; border: 1px solid var(--border); border-radius: 13px; background: var(--bg-card); color: inherit; transition: border-color .2s, transform .2s; }
+.continue-card:hover { border-color: var(--accent); transform: translateY(-2px); text-decoration: none; }
+.continue-card img { width: 68px; height: 92px; border-radius: 7px; object-fit: cover; background: var(--bg-secondary); }
+.continue-title { display: block; overflow: hidden; font-size: .88rem; font-weight: 700; text-overflow: ellipsis; white-space: nowrap; }
+.continue-meta { display: block; margin-top: .2rem; color: var(--text-muted); font-size: .75rem; }
+.continue-progress { display: block; height: 4px; margin-top: .55rem; border-radius: 5px; background: var(--bg-secondary); overflow: hidden; }
+.continue-progress span { display: block; height: 100%; border-radius: inherit; background: var(--accent); }
 @media (max-width: 760px) {
     .home-hero { grid-template-columns: 1fr; gap: .5rem; padding: 2rem 1.5rem 1.3rem; }
     .hero-copy h1 { max-width: 500px; font-size: clamp(2.7rem, 11vw, 4.2rem); }
@@ -95,6 +104,31 @@
         </div>
     </section>
 
+    {% if continue_reading %}
+    <section class="continue-reading" aria-labelledby="continue-title">
+        <div class="section-heading">
+            <h2 id="continue-title"><i data-lucide="book-open-check"></i> Continue reading</h2>
+            <a href="/library/">Open library <i data-lucide="arrow-right"></i></a>
+        </div>
+        <div class="continue-grid">
+            {% for item in continue_reading %}
+            {% with progress=item.progress chapter=item.progress.chapter manga=item.progress.chapter.manga %}
+            <a class="continue-card" href="{% url 'reader' chapter.id %}?page={{ progress.current_page }}" aria-label="Continue {{ manga.title }}, chapter {{ chapter.chapter_number }}, page {{ progress.current_page|add:1 }}">
+                {% if manga.cover_url %}
+                <img src="/api/proxy-image/?url={{ manga.cover_url|urlencode }}&amp;source={{ manga.source|urlencode }}" alt="" loading="lazy">
+                {% else %}<span aria-hidden="true"></span>{% endif %}
+                <span>
+                    <span class="continue-title">{{ manga.title }}</span>
+                    <span class="continue-meta">Chapter {{ chapter.chapter_number }} · Page {{ progress.current_page|add:1 }}</span>
+                    {% if item.percent %}<span class="continue-progress" aria-hidden="true"><span style="width:{{ item.percent }}%"></span></span>{% endif %}
+                </span>
+            </a>
+            {% endwith %}
+            {% endfor %}
+        </div>
+    </section>
+    {% endif %}
+
     <nav class="home-links" aria-label="Quick actions">
         <a class="home-link" href="/search/">
             <span class="home-link-icon"><i data-lucide="scan-search"></i></span>
@@ -121,7 +155,7 @@
             <a href="/manga/{{ manga.id }}/" class="card">
                 <img src="/api/proxy-image/?url={{ manga.cover_url|urlencode }}&amp;source={{ manga.source|urlencode }}" alt="{{ manga.title }}" loading="lazy"
                      onerror="this.src='data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 200 300%22><rect fill=%22%231c2333%22 width=%22200%22 height=%22300%22/><text x=%2250%%25%22 y=%2250%%25%22 fill=%22%236e7681%22 text-anchor=%22middle%22 font-size=%2216%22>No Cover</text></svg>'">
-                <div class="card-body"><h3>{{ manga.title }}</h3><div class="meta">{{ manga.source }} &middot; {{ manga.total_chapters_count }} chapters</div></div>
+                <div class="card-body"><h3>{{ manga.title }}</h3><div class="meta">{{ manga.source }} &middot; {{ manga.chapter_count }} chapters</div></div>
             </a>
             {% endfor %}
         </div>

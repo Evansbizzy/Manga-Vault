@@ -1,5 +1,11 @@
 # Codex Handoff
 
+## Repository security policy (2026-11-17)
+
+- Added `SECURITY.md` with supported-version scope, private-reporting instructions, safe testing guidance, and best-effort response/disclosure expectations. It uses GitHub private vulnerability reporting when enabled and a no-details public contact request as the fallback because no security email is configured.
+- Linked the policy from `README.md`.
+- Stop point: ready for the maintainer to push. Enable private vulnerability reporting in the GitHub repository settings so researchers can send details privately.
+
 ## Five priority improvements (2026-11-12)
 
 - **Account isolation:** added `Manga.owner` and owner-scoped uniqueness. Imports, library APIs, series/chapter/page/progress/download/task/delete endpoints, reader/detail pages, and chapter/volume file responses now require and scope to the account owner. The migration preserves legacy rows as ownerless. This local database had one account, so its 37 legacy titles were assigned to that account after verifying it was the sole user. On another database, review ownership and run `python manage.py claim_legacy_library <username>` explicitly.

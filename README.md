@@ -91,6 +91,8 @@ All-source discovery uses `GET /api/search/stream/?q=<title>` and returns newlin
 
 See [PRODUCT_WALKTHROUGH.md](PRODUCT_WALKTHROUGH.md) for the user and operator walkthrough, product comparison, current limitations, and prioritized roadmap. The app includes `/about/`, `/privacy/`, `/terms/`, and `/content-policy/`; operators should set `SITE_CONTACT_EMAIL` and adapt the starter policy text before public deployment. Policy pages are software documentation and do not replace legal review.
 
+To report a security vulnerability in the repository, follow [SECURITY.md](SECURITY.md). Do not post vulnerability details in a public issue.
+
 The reader remembers mode and reading direction in browser storage. Chapter progress is stored server-side per account. Each account can assign a reading status and up to 12 personal labels to a title, then filter its library by status or label.
 
 ## API endpoints
